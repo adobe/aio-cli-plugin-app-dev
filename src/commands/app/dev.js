@@ -23,7 +23,7 @@ const coreConfig = require('@adobe/aio-lib-core-config')
 const BaseCommand = require('../../BaseCommand')
 const runDev = require('../../lib/run-dev')
 const SERVER_DEFAULT_PORT = 9080
-const { runInProcess } = require('../../lib/app-helper')
+// const { runInProcess } = require('../../lib/app-helper')
 
 const DEV_KEYS_DIR = 'dist/dev-keys/'
 const PRIVATE_KEY_PATH = 'dist/dev-keys/private.key'
