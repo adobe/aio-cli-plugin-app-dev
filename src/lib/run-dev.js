@@ -57,7 +57,7 @@ async function runDev (config, dataDir, options = {}, log = () => {}, inprocHook
   let frontEndUrl
 
   // state
-  let devConfig = config // config will be different if local or remote
+  const devConfig = config // config will be different if local or remote
   devConfig.envFile = '.env'
 
   const cleanup = new Cleanup()
@@ -89,7 +89,7 @@ async function runDev (config, dataDir, options = {}, log = () => {}, inprocHook
         // todo: these need to be localhost:9080....
         urls = rtLibUtils.getActionUrls(devConfig, true, isLocal && !skipActions, true)
         urls = Object.entries(urls).reduce((acc, [key, value]) => {
-          let url = new URL(value)
+          const url = new URL(value)
           url.port = uiPort
           url.hostname = 'localhost'
           acc[key] = url.toString()

@@ -87,5 +87,5 @@ function writeConfig (file, config) {
 
 module.exports = {
   runScript,
-  writeConfig,
+  writeConfig
 }
