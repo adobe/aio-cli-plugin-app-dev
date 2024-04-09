@@ -15,7 +15,7 @@
     "@adobe/aio-lib-env": "^3",
     "@adobe/aio-lib-runtime": "^6",
     "@adobe/aio-lib-web": "^7",
-    "@oclif/core": "^2.11.6",
+    "@oclif/core": "^3.26.2",
     "@parcel/reporter-cli": "^2.7.0",
     "chalk": "^4",
     "execa": "^5.0.0",
