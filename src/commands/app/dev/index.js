@@ -16,15 +16,17 @@ const fs = require('fs-extra')
 const https = require('https')
 const getPort = require('get-port')
 const open = require('open')
+const yeoman = require('yeoman-environment')
+const dedent = require('dedent')
 
 const { Flags, ux } = require('@oclif/core')
 const coreConfig = require('@adobe/aio-lib-core-config')
 
-const BaseCommand = require('../../BaseCommand')
-const runDev = require('../../lib/run-dev')
-const SERVER_DEFAULT_PORT = 9080
-// const { runInProcess } = require('../../lib/app-helper')
+const BaseCommand = require('../../../BaseCommand')
+const runDev = require('../../../lib/run-dev')
+const vsCodeConfigGenerator = require('../../../generator/add-vscode-config')
 
+const SERVER_DEFAULT_PORT = 9080
 const DEV_KEYS_DIR = 'dist/dev-keys/'
 const PRIVATE_KEY_PATH = 'dist/dev-keys/private.key'
 const PUB_CERT_PATH = 'dist/dev-keys/cert-pub.crt'
@@ -32,10 +34,28 @@ const CONFIG_KEY = 'aio-dev.dev-keys'
 
 class Dev extends BaseCommand {
   async run () {
-    // cli input
+    if (process.env.TERM_PROGRAM !== 'vscode') {
+      const message =
+        dedent`
+        This command should only be run in a Visual Studio Code debug context.
+        Run 'aio app dev init' to initialize your App Builder project, and use the VS Code Debugger.`
+      this.error(message)
+    }
+
     const { flags } = await this.parse(Dev)
 
     const spinner = ora()
+
+    const env = yeoman.createEnv()
+    env.options = { skipInstall: true }
+
+    const appGen = env.instantiate(vsCodeConfigGenerator, {
+      options: {
+        'skip-prompt': true,
+        'server-default-port': SERVER_DEFAULT_PORT
+      }
+    })
+    await env.runGenerator(appGen)
 
     const runConfigs = await this.getAppExtConfigs(flags)
     const entries = Object.entries(runConfigs)
