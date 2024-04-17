@@ -11,9 +11,11 @@ governing permissions and limitations under the License.
 
 const express = require('express')
 const fs = require('fs-extra')
-const https = require('node:https') // built in
+const https = require('node:https')
 const crypto = require('node:crypto')
 const aioLogger = require('@adobe/aio-lib-core-logging')('@adobe/aio-cli-plugin-app-dev:bundle-serve', { level: process.env.LOG_LEVEL, provider: 'winston' })
+const livereload = require('livereload')
+const connectLiveReload = require('connect-livereload')
 
 let actionConfig = null
 
@@ -29,6 +31,15 @@ module.exports = async (bundler, options, log = () => { }, _actionConfig) => {
     key,
     cert
   }
+
+  const liveReloadServer = livereload.createServer({ https: serverOptions })
+  liveReloadServer.watch(options.dist)
+  liveReloadServer.server.once('connection', () => {
+    setTimeout(() => {
+      liveReloadServer.refresh('/')
+    }, 100)
+  })
+
   let subscription
 
   try {
@@ -62,8 +73,10 @@ module.exports = async (bundler, options, log = () => { }, _actionConfig) => {
   }
 
   const app = express()
+  app.use(connectLiveReload())
   app.use(express.json())
   app.use(express.static(options.dist))
+
   // DONE: serveAction needs to clear cache for each request, so we get live changes
   app.all('/api/v1/web/*', serveAction)
 
