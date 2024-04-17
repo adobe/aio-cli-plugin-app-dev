@@ -28,6 +28,7 @@ async function runDev (config, dataDir, options = {}, log = () => {}, inprocHook
     shouldDisableCache: true,
     shouldContentHash: true,
     shouldOptimize: false,
+    dist: config.web.distDev,
     ...options.parcel
   }
 

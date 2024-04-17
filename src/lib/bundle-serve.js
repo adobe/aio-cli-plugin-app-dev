@@ -22,7 +22,6 @@ module.exports = async (bundler, options, log = () => { }, _actionConfig) => {
   process.env.__OW_API_KEY = process.env.AIO_runtime_auth
   process.env.__OW_NAMESPACE = process.env.AIO_runtime_namespace
 
-  // options.dist ??
   const cert = fs.readFileSync(options.https.cert, 'utf-8')
   const key = fs.readFileSync(options.https.key, 'utf-8')
   const serverOptions = {
@@ -40,7 +39,7 @@ module.exports = async (bundler, options, log = () => { }, _actionConfig) => {
 
   const app = express()
   app.use(express.json())
-  app.use(express.static('dist/dx-excshell-1/web-dev'))
+  app.use(express.static(options.dist))
   // DONE: serveAction needs to clear cache for each request, so we get live changes
   app.all('/api/v1/web/*', serveAction)
 
