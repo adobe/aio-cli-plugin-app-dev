@@ -16,7 +16,6 @@ const rtLibUtils = rtLib.utils
 const { bundle } = require('@adobe/aio-lib-web')
 const bundleServe = require('./bundle-serve')
 const SERVER_DEFAULT_PORT = 9080
-// const serve = require('./serve')
 const Cleanup = require('./cleanup')
 
 const utils = require('./app-helper')

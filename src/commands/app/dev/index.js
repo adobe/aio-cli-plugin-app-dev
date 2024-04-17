@@ -16,7 +16,6 @@ const fs = require('fs-extra')
 const https = require('https')
 const getPort = require('get-port')
 const open = require('open')
-const yeoman = require('yeoman-environment')
 const dedent = require('dedent')
 
 const { Flags, ux } = require('@oclif/core')
@@ -24,7 +23,6 @@ const coreConfig = require('@adobe/aio-lib-core-config')
 
 const BaseCommand = require('../../../BaseCommand')
 const runDev = require('../../../lib/run-dev')
-const vsCodeConfigGenerator = require('../../../generator/add-vscode-config')
 
 const SERVER_DEFAULT_PORT = 9080
 const DEV_KEYS_DIR = 'dist/dev-keys/'
@@ -46,16 +44,15 @@ class Dev extends BaseCommand {
 
     const spinner = ora()
 
-    const env = yeoman.createEnv()
-    env.options = { skipInstall: true }
-
-    const appGen = env.instantiate(vsCodeConfigGenerator, {
-      options: {
-        'skip-prompt': true,
-        'server-default-port': SERVER_DEFAULT_PORT
-      }
-    })
-    await env.runGenerator(appGen)
+    // run `aio app dev init`
+    const InitCmd = this.config.findCommand('app:dev:init')
+    if (InitCmd) {
+      const Instance = await InitCmd.load()
+      await Instance.run()
+    } else {
+      // could not find the cert command, error is caught below
+      throw new Error('error while initializing app dev - no app:dev:init command found')
+    }
 
     const runConfigs = await this.getAppExtConfigs(flags)
     const entries = Object.entries(runConfigs)

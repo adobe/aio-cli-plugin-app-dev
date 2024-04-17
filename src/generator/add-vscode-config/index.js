@@ -52,17 +52,10 @@ class AddVsCodeConfig extends Generator {
     }
 
     this.vsCodeConfig.configurations.push({
-      name: 'App Builder: debug server-side',
+      name: 'App Builder: debug actions',
       type: 'node-terminal',
       request: 'launch',
       command: 'aio app dev'
-    })
-
-    this.vsCodeConfig.configurations.push({
-      name: 'App Builder: debug client-side',
-      type: 'chrome',
-      request: 'launch',
-      url: `http://localhost:${this.options[Option.SERVER_DEFAULT_PORT]}`
     })
 
     this.vsCodeConfig.configurations.push({
@@ -70,10 +63,15 @@ class AddVsCodeConfig extends Generator {
       type: 'node-terminal',
       request: 'launch',
       command: 'aio app dev',
+      trace: true,
+      sourceMapPathOverrides: {
+        '/__parcel_source_root/*': '${webRoot}/*' // eslint-disable-line no-template-curly-in-string
+      },
       serverReadyAction: {
-        pattern: '- Local:.+(https?://.+)',
-        uriFormat: '%s',
-        action: 'debugWithChrome'
+        pattern: 'server running on port : ([0-9]+)',
+        uriFormat: 'https://localhost:%s',
+        action: 'debugWithChrome',
+        webRoot: '${workspaceFolder}' // eslint-disable-line no-template-curly-in-string
       }
     })
   }
