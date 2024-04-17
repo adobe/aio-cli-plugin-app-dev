@@ -10,12 +10,14 @@ OF ANY KIND, either express or implied. See the License for the specific languag
 governing permissions and limitations under the License.
 */
 /* eslint-disable no-template-curly-in-string */
-const aioLogger = require('@adobe/aio-lib-core-logging')('@adobe/aio-cli-plugin-app-dev:runDev', { provider: 'debug' })
+const aioLogger = require('@adobe/aio-lib-core-logging')('@adobe/aio-cli-plugin-app-dev:run-dev', { level: process.env.LOG_LEVEL, provider: 'winston' })
 const rtLib = require('@adobe/aio-lib-runtime')
 const rtLibUtils = rtLib.utils
 const { bundle } = require('@adobe/aio-lib-web')
 const bundleServe = require('./bundle-serve')
+
 const SERVER_DEFAULT_PORT = 9080
+const BUNDLER_DEFAULT_PORT = 9090
 const Cleanup = require('./cleanup')
 
 const utils = require('./app-helper')
@@ -28,13 +30,12 @@ async function runDev (config, dataDir, options = {}, log = () => {}, inprocHook
     shouldDisableCache: true,
     shouldContentHash: true,
     shouldOptimize: false,
-    dist: config.web.distDev,
     ...options.parcel
   }
 
-  console.log('config.manifest is', config.manifest.full.packages)
+  aioLogger.log('config.manifest is', config.manifest.full.packages)
   const actionConfig = config.manifest.full.packages
-  // console.log('config actions is', actionConfig['dx-excshell-1'].actions)
+  // aioLogger.log('config actions is', actionConfig['dx-excshell-1'].actions)
 
   /* skip actions */
   // todo: is this really an option? -jm
@@ -44,11 +45,19 @@ async function runDev (config, dataDir, options = {}, log = () => {}, inprocHook
   const hasFrontend = config.app.hasFrontend
   const withBackend = config.app.hasBackend && !skipActions
   const isLocal = options.isLocal // applies only for backend
-  const portToUse = parseInt(process.env.PORT) || SERVER_DEFAULT_PORT
 
-  const uiPort = await getPort({ port: portToUse })
-  if (uiPort !== portToUse) {
-    log(`Could not use port:${portToUse}, using port:${uiPort} instead`)
+  const serverPortToUse = parseInt(process.env.PORT) || SERVER_DEFAULT_PORT
+  const bundlerPortToUse = parseInt(process.env.BUNDLER_PORT) || BUNDLER_DEFAULT_PORT
+
+  const serverPort = await getPort({ port: serverPortToUse })
+  const bundlerPort = await getPort({ port: bundlerPortToUse })
+
+  if (serverPort !== serverPortToUse) {
+    log(`Could not use server port:${serverPortToUse}, using port:${serverPort} instead`)
+  }
+
+  if (bundlerPort !== bundlerPortToUse) {
+    log(`Could not use bundler port:${bundlerPortToUse}, using port:${bundlerPort} instead`)
   }
   aioLogger.debug(`hasFrontend ${hasFrontend}`)
   aioLogger.debug(`withBackend ${withBackend}`)
@@ -68,7 +77,7 @@ async function runDev (config, dataDir, options = {}, log = () => {}, inprocHook
     if (withBackend) {
       if (isLocal) {
         // todo: remove this, this case should never happen
-        console.log('using local actions')
+        log('using local actions')
         // devConfig = localConfig
         // cleanup.add(() => localCleanup(), 'cleaning up runDevLocal')
       } else {
@@ -90,7 +99,7 @@ async function runDev (config, dataDir, options = {}, log = () => {}, inprocHook
         urls = rtLibUtils.getActionUrls(devConfig, true, isLocal && !skipActions, true)
         urls = Object.entries(urls).reduce((acc, [key, value]) => {
           const url = new URL(value)
-          url.port = uiPort
+          url.port = serverPort
           url.hostname = 'localhost'
           acc[key] = url.toString()
           return acc
@@ -103,11 +112,8 @@ async function runDev (config, dataDir, options = {}, log = () => {}, inprocHook
         if (!script) {
           const entries = config.web.src + '/**/*.html'
           bundleOptions.serveOptions = {
-            port: uiPort,
+            port: bundlerPort,
             https: bundleOptions.https
-          }
-          bundleOptions.hmrOptions = {
-            port: uiPort
           }
           // TODO: Move this and bundleServe to aio-lib-web so we can remove the parcel dependency
           bundleOptions.additionalReporters = [
@@ -126,8 +132,14 @@ async function runDev (config, dataDir, options = {}, log = () => {}, inprocHook
           let result
           // TODO: seems we are always using the default bundler
           // is the other case possible? -jm
+
+          const options = {
+            port: serverPort,
+            https: bundleOptions.https,
+            dist: config.web.distDev
+          }
           if (defaultBundler) {
-            result = await bundleServe(defaultBundler, bundleOptions, log, actionConfig)
+            result = await bundleServe(defaultBundler, options, log, actionConfig)
           } else {
             console.log('else else else')
             // result = await serve(devConfig.web.distDev, uiPort, bundleOptions, log, actionConfig)

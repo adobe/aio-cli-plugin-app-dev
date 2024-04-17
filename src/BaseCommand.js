@@ -18,7 +18,7 @@ const configLoader = require('@adobe/aio-cli-lib-app-config')
 const APPLICATION_CONFIG_KEY = 'application'
 const EXTENSIONS_CONFIG_KEY = 'extensions'
 const inquirer = require('inquirer')
-const aioLogger = require('@adobe/aio-lib-core-logging')('@adobe/aio-cli-plugin-app-dev', { provider: 'debug' })
+const aioLogger = require('@adobe/aio-lib-core-logging')('@adobe/aio-cli-plugin-app-dev', { level: process.env.LOG_LEVEL, provider: 'winston' })
 
 const {
   getCliEnv, /* function */

@@ -12,7 +12,7 @@ governing permissions and limitations under the License.
 const execa = require('execa')
 const fs = require('fs-extra')
 const path = require('node:path')
-const aioLogger = require('@adobe/aio-lib-core-logging')('@adobe/aio-cli-plugin-app-dev:lib-app-helper', { provider: 'debug' })
+const aioLogger = require('@adobe/aio-lib-core-logging')('@adobe/aio-cli-plugin-app-dev:lib-app-helper', { level: process.env.LOG_LEVEL, provider: 'winston' })
 
 /**
  * @typedef ChildProcess
