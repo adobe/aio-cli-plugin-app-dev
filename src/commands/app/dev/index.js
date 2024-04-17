@@ -223,7 +223,7 @@ Dev.flags = {
     description: 'Allow use in any terminal, not just Visual Studio Code',
     default: false,
     allowNo: true,
-    char: 'n'
+    char: 't'
   }),
   open: Flags.boolean({
     description: 'Open the default web browser after a successful run, only valid if your app has a front-end',
