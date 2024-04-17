@@ -63,7 +63,6 @@ class AddVsCodeConfig extends Generator {
       type: 'node-terminal',
       request: 'launch',
       command: 'aio app dev',
-      trace: true,
       sourceMapPathOverrides: {
         '/__parcel_source_root/*': '${webRoot}/*' // eslint-disable-line no-template-curly-in-string
       },

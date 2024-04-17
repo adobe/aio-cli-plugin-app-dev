@@ -32,6 +32,11 @@ module.exports = async (bundler, options, log = () => { }, _actionConfig) => {
   let subscription
 
   try {
+    // run it once
+    const { bundleGraph, buildTime } = await bundler.run()
+    const bundles = bundleGraph.getBundles()
+    console.log(`✨ Built ${bundles.length} bundles in ${buildTime}ms!`)
+
     subscription = await bundler.watch((err, event) => {
       if (err) {
         // fatal error

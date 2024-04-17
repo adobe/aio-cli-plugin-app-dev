@@ -35,15 +35,10 @@ async function runDev (config, dataDir, options = {}, log = () => {}, inprocHook
 
   aioLogger.log('config.manifest is', config.manifest.full.packages)
   const actionConfig = config.manifest.full.packages
-  // aioLogger.log('config actions is', actionConfig['dx-excshell-1'].actions)
-
-  /* skip actions */
-  // todo: is this really an option? -jm
-  const skipActions = !!options.skipActions
 
   // control variables
   const hasFrontend = config.app.hasFrontend
-  const withBackend = config.app.hasBackend && !skipActions
+  const withBackend = config.app.hasBackend
   const isLocal = options.isLocal // applies only for backend
 
   const serverPortToUse = parseInt(process.env.PORT) || SERVER_DEFAULT_PORT
@@ -75,17 +70,7 @@ async function runDev (config, dataDir, options = {}, log = () => {}, inprocHook
   try {
     // Build Phase - actions
     if (withBackend) {
-      if (isLocal) {
-        // todo: remove this, this case should never happen
-        log('using local actions')
-        // devConfig = localConfig
-        // cleanup.add(() => localCleanup(), 'cleaning up runDevLocal')
-      } else {
-        // check credentials
-        rtLibUtils.checkOpenWhiskCredentials(devConfig)
-        log('using remote actions')
-      }
-      // build and deploy actions - removed
+      rtLibUtils.checkOpenWhiskCredentials(devConfig)
     }
 
     // Build Phase - Web Assets, build, inject action url json
@@ -96,7 +81,7 @@ async function runDev (config, dataDir, options = {}, log = () => {}, inprocHook
         // note the condition: we still write backend urls EVEN if skipActions is set
         // the urls will always point to remotely deployed actions if skipActions is set
         // todo: these need to be localhost:9080....
-        urls = rtLibUtils.getActionUrls(devConfig, true, isLocal && !skipActions, true)
+        urls = rtLibUtils.getActionUrls(devConfig, true, false, false)
         urls = Object.entries(urls).reduce((acc, [key, value]) => {
           const url = new URL(value)
           url.port = serverPort
@@ -107,58 +92,35 @@ async function runDev (config, dataDir, options = {}, log = () => {}, inprocHook
       }
       utils.writeConfig(devConfig.web.injectedConfig, urls)
 
-      if (!options.skipServe) {
-        const script = await utils.runScript(config.hooks['build-static'])
-        if (!script) {
-          const entries = config.web.src + '/**/*.html'
-          bundleOptions.serveOptions = {
-            port: bundlerPort,
-            https: bundleOptions.https
-          }
-          // TODO: Move this and bundleServe to aio-lib-web so we can remove the parcel dependency
-          bundleOptions.additionalReporters = [
-            { packageName: '@parcel/reporter-cli', resolveFrom: __filename }
-          ]
-          defaultBundler = await bundle(entries, config.web.distDev, bundleOptions, log)
-        }
+      const entries = config.web.src + '/**/*.html'
+      bundleOptions.serveOptions = {
+        port: bundlerPort,
+        https: bundleOptions.https
       }
+      // TODO: Move this and bundleServe to aio-lib-web so we can remove the parcel dependency
+      bundleOptions.additionalReporters = [
+        { packageName: '@parcel/reporter-cli', resolveFrom: __filename }
+      ]
+      defaultBundler = await bundle(entries, config.web.distDev, bundleOptions, log)
     }
 
     // Deploy Phase - serve the web UI
     if (hasFrontend) {
-      if (!options.skipServe) {
-        const script = await utils.runScript(config.hooks['serve-static'])
-        if (!script) {
-          let result
-          // TODO: seems we are always using the default bundler
-          // is the other case possible? -jm
-
-          const options = {
-            port: serverPort,
-            https: bundleOptions.https,
-            dist: config.web.distDev
-          }
-          if (defaultBundler) {
-            result = await bundleServe(defaultBundler, options, log, actionConfig)
-          } else {
-            console.log('else else else')
-            // result = await serve(devConfig.web.distDev, uiPort, bundleOptions, log, actionConfig)
-          }
-          const { url, cleanup: serverCleanup } = result
-          frontEndUrl = url
-          cleanup.add(() => serverCleanup(), 'cleaning up serve...')
-        }
+      const options = {
+        port: serverPort,
+        https: bundleOptions.https,
+        dist: config.web.distDev
       }
+      const result = await bundleServe(defaultBundler, options, log, actionConfig)
+      const { url, cleanup: serverCleanup } = result
+      frontEndUrl = url
+      cleanup.add(() => serverCleanup(), 'cleaning up serve...')
     }
 
-    // if there is no frontEndUrl, this is because the hook serve-static was set
-    // since there is no way for us to know what serve-static does (to possibly get the front-end url from it),
-    // we treat this effectively as there is no front end, for the vscode config generator
     if (!frontEndUrl) {
       devConfig.app.hasFrontend = false
     }
 
-    // removed logpoller, we are not deploying actions, we are serving them
     cleanup.wait()
   } catch (e) {
     aioLogger.error('unexpected error, cleaning up...')
