@@ -112,7 +112,7 @@ async function runDev (config, dataDir, options = {}, log = () => {}, inprocHook
         dist: config.web.distDev
       }
       const result = await bundleServe(defaultBundler, options, log, actionConfig)
-      const { url, cleanup: serverCleanup } = result
+      const { url, serverCleanup } = result
       frontEndUrl = url
       cleanup.add(() => serverCleanup(), 'cleaning up serve...')
     }
