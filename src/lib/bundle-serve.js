@@ -75,10 +75,10 @@ module.exports = async (bundler, options, log = () => { }, _actionConfig) => {
   const url = `${options.https ? 'https:' : 'http:'}//localhost:${port}`
 
   const serverCleanup = async () => {
-    aioLogger.info('shutting down server ...')
-    await app.close()
+    aioLogger.info('shutting down http server ...')
     await server.close()
-    subscription ?? await subscription.unsubscribe()
+    aioLogger.info('removing parcel watcher ...')
+    await subscription.unsubscribe()
   }
 
   return {
