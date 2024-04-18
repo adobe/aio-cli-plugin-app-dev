@@ -25,14 +25,12 @@ const fs = require('fs-extra')
 
 const Default = {
   DESTINATION_FILE: '.vscode/launch.json',
-  SKIP_PROMPT: false,
-  SERVER_DEFAULT_PORT: 9080
+  SKIP_PROMPT: false
 }
 
 const Option = {
   DESTINATION_FILE: 'destination-file',
-  SKIP_PROMPT: 'skip-prompt',
-  SERVER_DEFAULT_PORT: 'server-default-port'
+  SKIP_PROMPT: 'skip-prompt'
 }
 
 class AddVsCodeConfig extends Generator {
@@ -42,7 +40,6 @@ class AddVsCodeConfig extends Generator {
     // options are inputs from CLI or yeoman parent generator
     this.option(Option.DESTINATION_FILE, { type: String, default: Default.DESTINATION_FILE })
     this.option(Option.SKIP_PROMPT, { type: Boolean, default: Default.SKIP_PROMPT })
-    this.option(Option.SERVER_DEFAULT_PORT, { type: Number, default: Default.SERVER_DEFAULT_PORT })
   }
 
   initializing () {

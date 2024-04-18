@@ -15,8 +15,6 @@ const yeoman = require('yeoman-environment')
 const BaseCommand = require('../../../BaseCommand')
 const vsCodeConfigGenerator = require('../../../generator/add-vscode-config')
 
-const SERVER_DEFAULT_PORT = 9080
-
 class Init extends BaseCommand {
   async run () {
     const env = yeoman.createEnv()
@@ -24,8 +22,7 @@ class Init extends BaseCommand {
 
     const appGen = env.instantiate(vsCodeConfigGenerator, {
       options: {
-        'skip-prompt': true,
-        'server-default-port': SERVER_DEFAULT_PORT
+        'skip-prompt': true
       }
     })
     await env.runGenerator(appGen)
