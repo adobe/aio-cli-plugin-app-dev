@@ -16,7 +16,6 @@ const fs = require('fs-extra')
 const https = require('https')
 const getPort = require('get-port')
 const open = require('open')
-const dedent = require('dedent')
 
 const { Flags, ux } = require('@oclif/core')
 const coreConfig = require('@adobe/aio-lib-core-config')
@@ -33,14 +32,6 @@ const CONFIG_KEY = 'aio-dev.dev-keys'
 class Dev extends BaseCommand {
   async run () {
     const { flags } = await this.parse(Dev)
-
-    if (!flags['any-terminal'] && process.env.TERM_PROGRAM !== 'vscode') {
-      const message =
-        dedent`
-        This command should only be run in a Visual Studio Code debug context.
-        Run 'aio app dev init' to initialize your App Builder project, and use the VS Code Debugger.`
-      this.error(message)
-    }
 
     const spinner = ora()
 
@@ -219,12 +210,6 @@ Dev.args = {}
 
 Dev.flags = {
   ...BaseCommand.flags,
-  'any-terminal': Flags.boolean({
-    description: 'Allow use in any terminal, not just Visual Studio Code',
-    default: false,
-    allowNo: true,
-    char: 't'
-  }),
   open: Flags.boolean({
     description: 'Open the default web browser after a successful run, only valid if your app has a front-end',
     default: false,
