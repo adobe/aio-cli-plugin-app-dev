@@ -35,16 +35,6 @@ class Dev extends BaseCommand {
 
     const spinner = ora()
 
-    // run `aio app dev init`
-    const InitCmd = this.config.findCommand('app:dev:init')
-    if (InitCmd) {
-      const Instance = await InitCmd.load()
-      await Instance.run()
-    } else {
-      // could not find the cert command, error is caught below
-      throw new Error('error while initializing app dev - no app:dev:init command found')
-    }
-
     const runConfigs = await this.getAppExtConfigs(flags)
     const entries = Object.entries(runConfigs)
     if (entries.length > 1) {
