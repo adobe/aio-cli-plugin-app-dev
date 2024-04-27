@@ -17,11 +17,9 @@ const aioLogger = require('@adobe/aio-lib-core-logging')('@adobe/aio-cli-plugin-
 const livereload = require('livereload')
 const connectLiveReload = require('connect-livereload')
 
-let actionConfig = null
+const API_PREFIX = 'api/v1/web'
 
-module.exports = async (bundler, options, log = () => { }, _actionConfig) => {
-  actionConfig = _actionConfig
-
+module.exports = async (bundler, options, log = () => {}, actionConfig) => {
   // set up environment variables for openwhisk
   process.env.__OW_API_KEY = process.env.AIO_RUNTIME_AUTH
   process.env.__OW_NAMESPACE = process.env.AIO_RUNTIME_NAMESPACE
@@ -34,53 +32,56 @@ module.exports = async (bundler, options, log = () => { }, _actionConfig) => {
     cert
   }
 
-  const liveReloadServer = livereload.createServer({ https: serverOptions })
-  liveReloadServer.watch(options.dist)
-  liveReloadServer.server.once('connection', () => {
-    setTimeout(() => {
-      liveReloadServer.refresh('/')
-    }, 100)
-  })
-
   let subscription
-
-  try {
-    // run it once
-    const { bundleGraph, buildTime } = await bundler.run()
-    const bundles = bundleGraph.getBundles()
-    console.log(`✨ Built ${bundles.length} bundles in ${buildTime}ms!`)
-
-    subscription = await bundler.watch((err, event) => {
-      if (err) {
-        // fatal error
-        throw err
-      }
-
-      aioLogger.info(`${event.changedAssets.size} static asset(s) changed`)
-      const limit = options.verbose ? Infinity : 5
-      if (event.changedAssets.size <= limit) {
-        event.changedAssets.forEach((value, key, map) => {
-          aioLogger.info('\t-->', value)
-        })
-      }
-      if (event.type === 'buildSuccess') {
-        const bundles = event.bundleGraph.getBundles()
-        aioLogger.info(`✨ Built ${bundles.length} bundles in ${event.buildTime}ms!`)
-      } else if (event.type === 'buildFailure') {
-        aioLogger.error(event.diagnostics)
-      }
+  if (options.hasFrontend) {
+    const liveReloadServer = livereload.createServer({ https: serverOptions })
+    liveReloadServer.watch(options.dist)
+    liveReloadServer.server.once('connection', () => {
+      setTimeout(() => {
+        liveReloadServer.refresh('/')
+      }, 100)
     })
-  } catch (err) {
-    aioLogger.error(err.diagnostics)
+
+    try {
+      // run it once
+      const { bundleGraph, buildTime } = await bundler.run()
+      const bundles = bundleGraph.getBundles()
+      console.log(`✨ Built ${bundles.length} bundles in ${buildTime}ms!`)
+
+      subscription = await bundler.watch((err, event) => {
+        if (err) {
+          // fatal error
+          throw err
+        }
+
+        aioLogger.info(`${event.changedAssets.size} static asset(s) changed`)
+        const limit = options.verbose ? Infinity : 5
+        if (event.changedAssets.size <= limit) {
+          event.changedAssets.forEach((value, key, map) => {
+            aioLogger.info('\t-->', value)
+          })
+        }
+        if (event.type === 'buildSuccess') {
+          const bundles = event.bundleGraph.getBundles()
+          aioLogger.info(`✨ Built ${bundles.length} bundles in ${event.buildTime}ms!`)
+        } else if (event.type === 'buildFailure') {
+          aioLogger.error(event.diagnostics)
+        }
+      })
+    } catch (err) {
+      aioLogger.error(err.diagnostics)
+    }
   }
 
   const app = express()
   app.use(connectLiveReload())
   app.use(express.json())
-  app.use(express.static(options.dist))
+  if (options.hasFrontend) {
+    app.use(express.static(options.dist))
+  }
 
   // DONE: serveAction needs to clear cache for each request, so we get live changes
-  app.all('/api/v1/web/*', serveAction)
+  app.all(`/${API_PREFIX}/*`, (req, res, next) => serveAction(req, res, next, actionConfig))
 
   const port = options.port || Number(process.env.PORT || 9000)
   const server = https.createServer(serverOptions, app)
@@ -93,7 +94,7 @@ module.exports = async (bundler, options, log = () => { }, _actionConfig) => {
     aioLogger.info('shutting down http server ...')
     await server.close()
     aioLogger.info('removing parcel watcher ...')
-    await subscription.unsubscribe()
+    await subscription?.unsubscribe()
   }
 
   return {
@@ -102,7 +103,7 @@ module.exports = async (bundler, options, log = () => { }, _actionConfig) => {
   }
 }
 
-const serveAction = async (req, res, next) => {
+const serveAction = async (req, res, next, actionConfig) => {
   const url = req.params[0]
   aioLogger.info(req.url)
   const [packageName, actionName, ...path] = url.split('/')
@@ -191,6 +192,7 @@ const serveAction = async (req, res, next) => {
 
     if (actionFunction) {
       try {
+        process.env.__OW_ACTION_NAME = actionName
         const response = await actionFunction(params)
         const headers = response.headers || {}
         const status = response.statusCode || 200

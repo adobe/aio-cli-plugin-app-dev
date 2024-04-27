@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Adobe. All rights reserved.
+Copyright 2024 Adobe. All rights reserved.
 This file is licensed to you under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License. You may obtain a copy
 of the License at http://www.apache.org/licenses/LICENSE-2.0
@@ -19,6 +19,7 @@ const open = require('open')
 
 const { Flags, ux } = require('@oclif/core')
 const coreConfig = require('@adobe/aio-lib-core-config')
+const aioLogger = require('@adobe/aio-lib-core-logging')('@adobe/aio-cli-plugin-app-dev:index', { level: process.env.LOG_LEVEL, provider: 'winston' })
 
 const BaseCommand = require('../../../BaseCommand')
 const runDev = require('../../../lib/run-dev')
@@ -45,7 +46,7 @@ class Dev extends BaseCommand {
 
     try {
       // now we are good, either there is only 1 extension point or -e flag for one was provided
-      await this.runOneExtensionPoint(name, config, flags, spinner)
+      await this.runOneExtensionPoint(name, config, flags)
     } catch (error) {
       spinner.stop()
       // delegate to top handler
@@ -53,8 +54,8 @@ class Dev extends BaseCommand {
     }
   }
 
-  async runOneExtensionPoint (name, config, flags, spinner) {
-    console.log('runOneExtensionPoint called with', name, flags)
+  async runOneExtensionPoint (name, config, flags) {
+    aioLogger.debug('runOneExtensionPoint called with', name, flags)
 
     const hasBackend = config.app.hasBackend
     const hasFrontend = config.app.hasFrontend
@@ -62,12 +63,9 @@ class Dev extends BaseCommand {
     if (!hasBackend && !hasFrontend) {
       this.error(new Error('nothing to run.. there is no frontend and no manifest.yml, are you in a valid app?'))
     }
-    if (!flags.actions && !hasFrontend) {
-      this.error(new Error('nothing to run.. there is no frontend and --no-actions is set'))
-    }
 
     const runOptions = {
-      skipActions: false, // todo: remove these flags, they should always be false
+      skipActions: false,
       skipServe: false,
       parcel: {
         logLevel: flags.verbose ? 'verbose' : 'warn',
@@ -87,21 +85,16 @@ class Dev extends BaseCommand {
     // }
 
     // check if there are certificates available, and generate them if not ...
-    // only care about certificates if the application has a UI
-    if (hasFrontend) {
-      try {
-        runOptions.parcel.https = await this.getOrGenerateCertificates()
-      } catch (error) {
-        this.error(error)
-      }
+    try {
+      runOptions.parcel.https = await this.getOrGenerateCertificates()
+    } catch (error) {
+      this.error(error)
     }
 
-    const onProgress = info => {
-      spinner.info(chalk.dim(`${info}`))
-      spinner.start()
-    }
+    const wrapLog = (...args) => this.log(...args)
+
     const inprocHook = this.config.runHook.bind(this.config)
-    const frontendUrl = await runDev(config, this.config.dataDir, runOptions, onProgress, inprocHook)
+    const frontendUrl = await runDev(config, runOptions, wrapLog, inprocHook)
 
     // todo: fire post hook
     // try {
@@ -110,7 +103,7 @@ class Dev extends BaseCommand {
     //   this.log(err)
     // }
 
-    if (frontendUrl) {
+    if (hasFrontend) {
       this.log()
       this.log(chalk.blue(chalk.bold(`To view your local application:\n  -> ${frontendUrl}`)))
       const launchUrl = this.getLaunchUrlPrefix() + frontendUrl

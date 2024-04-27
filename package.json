@@ -25,6 +25,7 @@
     "get-port": "^5",
     "inquirer": "^8",
     "livereload": "^0.9.3",
+    "lodash.clonedeep": "^4.5.0",
     "open": "^8.4.2",
     "ora": "^5",
     "yeoman-environment": "^3",
