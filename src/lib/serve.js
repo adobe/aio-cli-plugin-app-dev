@@ -184,12 +184,26 @@ function statusCodeMessage (statusCode) {
  * @returns {boolean} true if it is a web action
  */
 function isWebAction (action) {
-  const toBoolean = (value) => (value === 'yes' || value === 'true' || value === true)
+  const toBoolean = (value) => (value !== 'no' || value !== 'false' || value !== false)
 
   const webExportValue = action?.annotations?.['web-export']
   const webValue = action?.web
 
   return (toBoolean(webExportValue) || toBoolean(webValue))
+}
+
+/**
+ * Determines if an action is a raw web action.
+ *
+ * @param {object} action the action object
+ * @returns {boolean} true if it is a web action
+ */
+function isRawWebAction (action) {
+  const raw = 'raw'
+  const webExportValue = action?.annotations?.['web-export']
+  const webValue = action?.web
+
+  return (webExportValue === raw || webValue === raw)
 }
 
 /**
@@ -262,6 +276,9 @@ async function serveWebAction (req, res, _next, actionConfig) {
               .status(statusCode)
               .send({ error: statusCodeMessage(statusCode) })
           }
+          if (isRawWebAction(action)) {
+            actionLogger.warn('TODO: raw web action handling is not implemented yet')
+          }
 
           process.env.__OW_ACTIVATION_ID = crypto.randomBytes(16).toString('hex')
           delete require.cache[action.function]
@@ -305,6 +322,9 @@ async function serveWebAction (req, res, _next, actionConfig) {
       return res
         .status(statusCode)
         .send({ error: statusCodeMessage(statusCode) })
+    }
+    if (isRawWebAction(action)) {
+      actionLogger.warn('TODO: raw web action handling is not implemented yet')
     }
 
     // check if action is protected
