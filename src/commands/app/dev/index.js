@@ -27,7 +27,7 @@ const { runInProcess } = require('../../../lib/app-helper')
 
 const APP_EVENT_PRE_APP_DEV = 'pre-app-dev'
 const APP_EVENT_POST_APP_DEV = 'post-app-dev'
-const { PUB_CERT_PATH, PRIVATE_KEY_PATH, DEV_KEYS_DIR, DEV_KEYS_CONFIG_KEY, SERVER_DEFAULT_PORT } = require('../../../lib/constants')
+const { PUB_CERT_PATH, PRIVATE_KEY_PATH, DEV_KEYS_DIR, DEV_KEYS_CONFIG_KEY, SERVER_DEFAULT_PORT, DEV_API_WEB_PREFIX } = require('../../../lib/constants')
 
 class Dev extends BaseCommand {
   async run () {
@@ -64,8 +64,17 @@ class Dev extends BaseCommand {
   }
 
   displayActionUrls (actionUrls) {
-    this.log(chalk.blue(chalk.bold('Your actions:')))
-    Object.values(actionUrls).forEach(url => this.log(chalk.blue(chalk.bold(`  -> ${url}`))))
+    const blueBoldLog = (...args) => this.log(chalk.blue(chalk.bold(...args)))
+    const printUrl = (url) => blueBoldLog(`  -> ${url}`)
+
+    blueBoldLog('Your actions:')
+    const webActions = Object.values(actionUrls).filter(url => url.includes(DEV_API_WEB_PREFIX))
+    const nonWebActions = Object.values(actionUrls).filter(url => !url.includes(DEV_API_WEB_PREFIX))
+
+    blueBoldLog('web actions:')
+    webActions.forEach(printUrl)
+    blueBoldLog('non-web actions:')
+    nonWebActions.forEach(printUrl)
   }
 
   async runOneExtensionPoint (name, config, flags) {

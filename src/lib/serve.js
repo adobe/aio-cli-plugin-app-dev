@@ -20,7 +20,7 @@ const utils = require('./app-helper')
 const getPort = require('get-port')
 const rtLib = require('@adobe/aio-lib-runtime')
 const coreLogger = require('@adobe/aio-lib-core-logging')
-const { SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX } = require('./constants')
+const { SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX } = require('./constants')
 
 module.exports = async function serve (options, devConfig, _inprocHook) {
   const serveLogger = coreLogger('serve', { level: process.env.LOG_LEVEL, provider: 'winston' })
@@ -79,7 +79,7 @@ module.exports = async function serve (options, devConfig, _inprocHook) {
       const bundlerPort = await getPort({ port: bundlerPortToUse })
 
       if (bundlerPort !== bundlerPortToUse) {
-        serveLogger(`Could not use bundler port:${bundlerPortToUse}, using port:${bundlerPort} instead`)
+        serveLogger.info(`Could not use bundler port ${bundlerPortToUse}, using port ${bundlerPort} instead`)
       }
 
       const entries = devConfig.web.src + '/**/*.html'
@@ -121,19 +121,20 @@ module.exports = async function serve (options, devConfig, _inprocHook) {
   }
 
   const app = express()
-  app.use(connectLiveReload())
   app.use(express.json())
   if (hasFrontend) {
+    app.use(connectLiveReload())
     app.use(express.static(devConfig.web.distDev))
   }
 
-  // DONE: serveAction needs to clear cache for each request, so we get live changes
-  app.all(`/${DEV_API_PREFIX}/*`, (req, res, next) => serveAction(req, res, next, actionConfig))
+  // serveAction needs to clear cache for each request, so we get live changes
+  app.all(`/${DEV_API_WEB_PREFIX}/*`, (req, res, next) => serveWebAction(req, res, next, actionConfig))
+  app.all(`/${DEV_API_PREFIX}/*`, (req, res, next) => serveNonWebAction(req, res, next, actionConfig))
 
   const server = https.createServer(serverOptions, app)
   server.listen(serverPort, () => {
     if (serverPort !== serverPortToUse) {
-      serveLogger(`Could not use server port:${serverPortToUse}, using port:${serverPort} instead`)
+      serveLogger.info(`Could not use server port ${serverPortToUse}, using port ${serverPort} instead`)
     }
     serveLogger.info('server running on port : ', serverPort)
   })
@@ -177,7 +178,8 @@ function statusCodeMessage (statusCode) {
 }
 
 /**
- * Express path handler to handle action API calls.
+ * Express path handler to handle non-web action API calls.
+ * Openwhisk returns 401 when you call a non-web action via HTTP GET.
  *
  * @param {*} req the http request
  * @param {*} res the http response
@@ -185,12 +187,34 @@ function statusCodeMessage (statusCode) {
  * @param {*} actionConfig the action configuration
  * @returns {Response} the response
  */
-async function serveAction (req, res, _next, actionConfig) {
+async function serveNonWebAction (req, res, _next, actionConfig) {
+  const url = req.params[0]
+  const [, actionName] = url.split('/')
+  const actionLogger = coreLogger(`serveNonWebAction ${actionName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
+
+  const statusCode = 401
+  actionLogger.error(`${statusCode} ${statusCodeMessage(statusCode)}`)
+
+  return res
+    .status(statusCode)
+    .send({ error: statusCodeMessage(statusCode) })
+}
+
+/**
+ * Express path handler to handle web action API calls.
+ *
+ * @param {*} req the http request
+ * @param {*} res the http response
+ * @param {*} _next the next http handler
+ * @param {*} actionConfig the action configuration
+ * @returns {Response} the response
+ */
+async function serveWebAction (req, res, _next, actionConfig) {
   const url = req.params[0]
   const [packageName, actionName, ...path] = url.split('/')
   const action = actionConfig[packageName]?.actions[actionName]
 
-  const actionLogger = coreLogger(`serveAction ${actionName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
+  const actionLogger = coreLogger(`serveWebAction ${actionName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
 
   if (!action) {
     // action could be a sequence ... todo: refactor these 2 paths to 1 action runner
