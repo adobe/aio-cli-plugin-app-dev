@@ -184,7 +184,7 @@ function statusCodeMessage (statusCode) {
  * @returns {boolean} true if it is a web action
  */
 function isWebAction (action) {
-  const toBoolean = (value) => (value !== 'no' || value !== 'false' || value !== false)
+  const toBoolean = (value) => (value !== 'no' && value !== 'false' && value !== false)
 
   const webExportValue = action?.annotations?.['web-export']
   const webValue = action?.web
