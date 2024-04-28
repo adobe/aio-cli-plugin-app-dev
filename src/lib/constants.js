@@ -20,8 +20,8 @@ const {
 } = process.env
 
 module.exports = {
-  SERVER_DEFAULT_PORT,
-  BUNDLER_DEFAULT_PORT,
+  SERVER_DEFAULT_PORT: parseInt(SERVER_DEFAULT_PORT, 10), // parse any env override
+  BUNDLER_DEFAULT_PORT: parseInt(BUNDLER_DEFAULT_PORT, 10), // parse any env override
   DEV_API_PREFIX,
   DEV_API_WEB_PREFIX,
   DEV_KEYS_DIR,

@@ -129,7 +129,7 @@ class Dev extends BaseCommand {
     if (hasBackend) {
       this.displayActionUrls(actionUrls)
     }
-    this.log('press CTRL+C to terminate dev environment')
+    this.log('press CTRL+C to terminate the dev environment')
   }
 
   async getOrGenerateCertificates () {
