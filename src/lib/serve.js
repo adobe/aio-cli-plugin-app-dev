@@ -178,6 +178,21 @@ function statusCodeMessage (statusCode) {
 }
 
 /**
+ * Determines if an action is a web action.
+ *
+ * @param {object} action the action object
+ * @returns {boolean} true if it is a web action
+ */
+function isWebAction (action) {
+  const toBoolean = (value) => (value === 'yes' || value === 'true' || value === true)
+
+  const webExportValue = action?.annotations?.['web-export']
+  const webValue = action?.web
+
+  return (toBoolean(webExportValue) || toBoolean(webValue))
+}
+
+/**
  * Express path handler to handle non-web action API calls.
  * Openwhisk returns 401 when you call a non-web action via HTTP GET.
  *
@@ -240,6 +255,14 @@ async function serveWebAction (req, res, _next, actionConfig) {
         const actionName = actions[i].trim()
         const action = actionConfig[packageName]?.actions[actionName]
         if (action) {
+          if (!isWebAction(action)) {
+            const statusCode = 404
+            actionLogger.error(`${statusCode} ${statusCodeMessage(statusCode)}`)
+            return res
+              .status(statusCode)
+              .send({ error: statusCodeMessage(statusCode) })
+          }
+
           process.env.__OW_ACTIVATION_ID = crypto.randomBytes(16).toString('hex')
           delete require.cache[action.function]
           const actionFunction = require(action.function).main
@@ -276,6 +299,14 @@ async function serveWebAction (req, res, _next, actionConfig) {
         .send({ error: statusCodeMessage(statusCode) })
     }
   } else {
+    if (!isWebAction(action)) {
+      const statusCode = 404
+      actionLogger.error(`${statusCode} ${statusCodeMessage(statusCode)}`)
+      return res
+        .status(statusCode)
+        .send({ error: statusCodeMessage(statusCode) })
+    }
+
     // check if action is protected
     if (action?.annotations?.['require-adobe-auth']) {
       // check if user is authenticated
