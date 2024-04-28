@@ -27,15 +27,6 @@ class Cleanup {
   }
 
   async wait () {
-    /*
-      todo: optimization here to only add the dummyProc if there are no other cleanup functions to wait for.
-      currently tests are dependent on the execa('node') being called
-    */
-    // if (this.resources.length < 1) {
-    const dummyProc = execa('node')
-    this.add(async () => await dummyProc.kill(), 'stopping sigint waiter...')
-    // }
-    // bind cleanup function
     process.on('SIGINT', async () => {
       try {
         await this.run()
