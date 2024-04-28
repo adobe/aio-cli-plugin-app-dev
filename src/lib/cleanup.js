@@ -39,7 +39,7 @@ class Cleanup {
     process.on('SIGINT', async () => {
       try {
         await this.run()
-        aioLogger.info('exiting!')
+        aioLogger.debug('exiting!')
         process.exit(0) // eslint-disable-line no-process-exit
       } catch (e) {
         aioLogger.error('unexpected error while cleaning up!')

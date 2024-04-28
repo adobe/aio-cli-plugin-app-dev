@@ -11,11 +11,11 @@ governing permissions and limitations under the License.
 */
 
 const ora = require('ora')
-const chalk = require('chalk')
 const fs = require('fs-extra')
 const https = require('https')
 const getPort = require('get-port')
 const open = require('open')
+const chalk = require('chalk')
 
 const { Flags, ux } = require('@oclif/core')
 const coreConfig = require('@adobe/aio-lib-core-config')
@@ -23,12 +23,11 @@ const aioLogger = require('@adobe/aio-lib-core-logging')('@adobe/aio-cli-plugin-
 
 const BaseCommand = require('../../../BaseCommand')
 const runDev = require('../../../lib/run-dev')
+const { runInProcess } = require('../../../lib/app-helper')
 
-const SERVER_DEFAULT_PORT = 9080
-const DEV_KEYS_DIR = 'dist/dev-keys/'
-const PRIVATE_KEY_PATH = 'dist/dev-keys/private.key'
-const PUB_CERT_PATH = 'dist/dev-keys/cert-pub.crt'
-const CONFIG_KEY = 'aio-dev.dev-keys'
+const APP_EVENT_PRE_APP_DEV = 'pre-app-dev'
+const APP_EVENT_POST_APP_DEV = 'post-app-dev'
+const { PUB_CERT_PATH, PRIVATE_KEY_PATH, DEV_KEYS_DIR, DEV_KEYS_CONFIG_KEY, SERVER_DEFAULT_PORT } = require('../../../lib/constants')
 
 class Dev extends BaseCommand {
   async run () {
@@ -41,9 +40,8 @@ class Dev extends BaseCommand {
     if (entries.length > 1) {
       this.error('Your app implements multiple extensions. You can only run one at the time, please select which extension to run with the \'-e\' flag.')
     }
-    const name = entries[0][0]
-    const config = entries[0][1]
 
+    const [name, config] = entries[0]
     try {
       // now we are good, either there is only 1 extension point or -e flag for one was provided
       await this.runOneExtensionPoint(name, config, flags)
@@ -52,6 +50,22 @@ class Dev extends BaseCommand {
       // delegate to top handler
       throw error
     }
+  }
+
+  displayFrontendUrl (flags, frontendUrl) {
+    this.log(chalk.blue(chalk.bold(`To view your local application:\n  -> ${frontendUrl}`)))
+    const launchUrl = this.getLaunchUrlPrefix() + frontendUrl
+    if (flags.open) {
+      this.log(chalk.blue(chalk.bold(`Opening your deployed application in the Experience Cloud shell:\n  -> ${launchUrl}`)))
+      open(launchUrl)
+    } else {
+      this.log(chalk.blue(chalk.bold(`To view your deployed application in the Experience Cloud shell:\n  -> ${launchUrl}`)))
+    }
+  }
+
+  displayActionUrls (actionUrls) {
+    this.log(chalk.blue(chalk.bold('Your actions:')))
+    Object.values(actionUrls).forEach(url => this.log(chalk.blue(chalk.bold(`  -> ${url}`))))
   }
 
   async runOneExtensionPoint (name, config, flags) {
@@ -73,46 +87,38 @@ class Dev extends BaseCommand {
         shouldContentHash: false
       },
       fetchLogs: true,
-      isLocal: flags.local,
+      isLocal: true,
       verbose: flags.verbose
     }
 
-    // todo: fire pre hook
-    // try {
-    //   await runInProcess(config.hooks['pre-app-dev'], { config, options: runOptions })
-    // } catch (err) {
-    //   this.log(err)
-    // }
+    try {
+      await runInProcess(config.hooks[APP_EVENT_PRE_APP_DEV], { config, options: runOptions })
+    } catch (err) {
+      this.log(err)
+    }
 
-    // check if there are certificates available, and generate them if not ...
+    // check if there are certificates available, and generate them if not
     try {
       runOptions.parcel.https = await this.getOrGenerateCertificates()
     } catch (error) {
       this.error(error)
     }
 
-    const wrapLog = (...args) => this.log(...args)
-
     const inprocHook = this.config.runHook.bind(this.config)
-    const frontendUrl = await runDev(config, runOptions, wrapLog, inprocHook)
+    const { frontendUrl, actionUrls } = await runDev(config, runOptions, inprocHook)
 
-    // todo: fire post hook
-    // try {
-    //   await runInProcess(config.hooks['post-app-dev'], config)
-    // } catch (err) {
-    //   this.log(err)
-    // }
+    // fire post hook
+    try {
+      await runInProcess(config.hooks[APP_EVENT_POST_APP_DEV], config)
+    } catch (err) {
+      this.log(err)
+    }
 
     if (hasFrontend) {
-      this.log()
-      this.log(chalk.blue(chalk.bold(`To view your local application:\n  -> ${frontendUrl}`)))
-      const launchUrl = this.getLaunchUrlPrefix() + frontendUrl
-      if (flags.open) {
-        this.log(chalk.blue(chalk.bold(`Opening your deployed application in the Experience Cloud shell:\n  -> ${launchUrl}`)))
-        open(launchUrl)
-      } else {
-        this.log(chalk.blue(chalk.bold(`To view your deployed application in the Experience Cloud shell:\n  -> ${launchUrl}`)))
-      }
+      this.displayFrontendUrl(flags, frontendUrl)
+    }
+    if (hasBackend) {
+      this.displayActionUrls(actionUrls)
     }
     this.log('press CTRL+C to terminate dev environment')
   }
@@ -131,7 +137,7 @@ class Dev extends BaseCommand {
     await fs.ensureDir(DEV_KEYS_DIR)
 
     /* or get existing certificates from config.. */
-    const devConfig = coreConfig.get(CONFIG_KEY)
+    const devConfig = coreConfig.get(DEV_KEYS_CONFIG_KEY)
     if (devConfig && devConfig.privateKey && devConfig.publicCert) {
       // yes? write them to file
       await fs.writeFile(PRIVATE_KEY_PATH, devConfig.privateKey)
@@ -154,34 +160,39 @@ class Dev extends BaseCommand {
     // 2. store them globally in config
     const privateKey = (await fs.readFile(PRIVATE_KEY_PATH)).toString()
     const publicCert = (await fs.readFile(PUB_CERT_PATH)).toString()
-    coreConfig.set(CONFIG_KEY + '.privateKey', privateKey)
-    coreConfig.set(CONFIG_KEY + '.publicCert', publicCert)
+    coreConfig.set(`${DEV_KEYS_CONFIG_KEY}.privateKey`, privateKey)
+    coreConfig.set(`${DEV_KEYS_CONFIG_KEY}.publicCert`, publicCert)
 
     // 3. ask the developer to accept them
     let certAccepted = false
     const startTime = Date.now()
-    const server = https.createServer({ key: privateKey, cert: publicCert }, function (req, res) {
+
+    const server = https.createServer({ key: privateKey, cert: publicCert }, (_, res) => {
       certAccepted = true
       res.writeHead(200)
       res.end('Congrats, you have accepted the certificate and can now use it for development on this machine.\n' +
       'You can close this window.')
     })
+
     const port = parseInt(process.env.PORT) || SERVER_DEFAULT_PORT
     const actualPort = await getPort({ port })
     server.listen(actualPort)
     this.log('A self signed development certificate has been generated, you will need to accept it in your browser in order to use it.')
     open(`https://localhost:${actualPort}`)
     ux.action.start('Waiting for the certificate to be accepted.')
+
     // eslint-disable-next-line no-unmodified-loop-condition
     while (!certAccepted && Date.now() - startTime < 20000) {
       await ux.wait()
     }
+
     if (certAccepted) {
       ux.action.stop()
       this.log('Great, you accepted the certificate!')
     } else {
       ux.action.stop('timed out')
     }
+
     server.close()
     return certs
   }
