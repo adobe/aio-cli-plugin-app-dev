@@ -21,7 +21,7 @@ const getPort = require('get-port')
 const rtLib = require('@adobe/aio-lib-runtime')
 const coreLogger = require('@adobe/aio-lib-core-logging')
 const { SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX } = require('./constants')
-
+const { getReasonPhrase } = require('http-status-codes')
 /**
  * @typedef {object} ActionRequestContext
  * @property {object} action the action object
@@ -170,22 +170,7 @@ module.exports = async function serve (options, devConfig, _inprocHook) {
  * @returns {string} the HTTP status message for the code
  */
 function statusCodeMessage (statusCode) {
-  switch (statusCode) {
-    case 200:
-      return 'success'
-    case 400:
-      return 'bad request'
-    case 401:
-      return 'unauthorized'
-    case 403:
-      return 'forbidden'
-    case 404:
-      return 'not found'
-    case 500:
-      return 'internal server error'
-    default:
-      return `unknown error for ${statusCode}`
-  }
+  return getReasonPhrase(statusCode)
 }
 
 /**
