@@ -22,6 +22,15 @@ const rtLib = require('@adobe/aio-lib-runtime')
 const coreLogger = require('@adobe/aio-lib-core-logging')
 const { SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX } = require('./constants')
 
+/**
+ * @typedef {object} ActionRequestContext
+ * @property {object} action the action object
+ * @property {string} packageName the package name
+ * @property {string} actionName the action name
+ * @property {string} owPath the rest of the request path
+ * @property {object} actionConfig the whole action config
+ */
+
 module.exports = async function serve (options, devConfig, _inprocHook) {
   const serveLogger = coreLogger('serve', { level: process.env.LOG_LEVEL, provider: 'winston' })
 
@@ -128,8 +137,8 @@ module.exports = async function serve (options, devConfig, _inprocHook) {
   }
 
   // serveAction needs to clear cache for each request, so we get live changes
-  app.all(`/${DEV_API_WEB_PREFIX}/*`, (req, res, next) => serveWebAction(req, res, next, actionConfig))
-  app.all(`/${DEV_API_PREFIX}/*`, (req, res, next) => serveNonWebAction(req, res, next, actionConfig))
+  app.all(`/${DEV_API_WEB_PREFIX}/*`, (req, res) => serveWebAction(req, res, actionConfig))
+  app.all(`/${DEV_API_PREFIX}/*`, (req, res) => serveNonWebAction(req, res))
 
   const server = https.createServer(serverOptions, app)
   server.listen(serverPort, () => {
@@ -164,6 +173,8 @@ function statusCodeMessage (statusCode) {
   switch (statusCode) {
     case 200:
       return 'success'
+    case 400:
+      return 'bad request'
     case 401:
       return 'unauthorized'
     case 403:
@@ -212,21 +223,144 @@ function isRawWebAction (action) {
  *
  * @param {*} req the http request
  * @param {*} res the http response
- * @param {*} _next the next http handler
- * @param {*} actionConfig the action configuration
  * @returns {Response} the response
  */
-async function serveNonWebAction (req, res, _next, actionConfig) {
+async function serveNonWebAction (req, res) {
   const url = req.params[0]
   const [, actionName] = url.split('/')
-  const actionLogger = coreLogger(`serveNonWebAction ${actionName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
+  const logger = coreLogger(`serveNonWebAction ${actionName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
 
-  const statusCode = 401
-  actionLogger.error(`${statusCode} ${statusCodeMessage(statusCode)}`)
+  return httpStatusResponse({ statusCode: 401, res, logger })
+}
 
-  return res
+/**
+ * Handle a sequence.
+ *
+ * @param {object} params the parameters
+ * @param {object} params.req the http request object
+ * @param {object} params.res the http response object
+ * @param {object} params.sequence the sequence object
+ * @param {ActionRequestContext} params.actionRequestContext the ActionRequestContext object
+ * @param {object} params.logger the logger object
+ * @returns {void}
+ */
+async function handleSequence ({ req, res, sequence, actionRequestContext, logger }) {
+  const actions = sequence.actions?.split(',')
+  const params = {
+    __ow_body: req.body,
+    __ow_headers: req.headers,
+    __ow_path: actionRequestContext.owPath,
+    __ow_query: req.query,
+    __ow_method: req.method.toLowerCase(),
+    ...req.query,
+    ...actionRequestContext.action?.inputs,
+    ...(req.is('application/json') ? req.body : {})
+  }
+  params.__ow_headers['x-forwarded-for'] = '127.0.0.1'
+  logger.debug('params = ', params)
+  logger.debug('this is a sequence')
+  // for each action in sequence, serveAction
+  for (let i = 0; i < actions.length; i++) {
+    const actionName = actions[i].trim()
+    const action = actionRequestContext.actionConfig[actionRequestContext.packageName]?.actions[actionName]
+    if (action) {
+      await handleAction({ req, res, actionRequestContext, logger })
+    } else {
+      return httpStatusResponse({ statusCode: 404, statusMessage: `${actionName} in sequence not found`, res, logger })
+    }
+  }
+}
+
+/**
+ * Handle an action.
+ *
+ * @param {object} params the parameters
+ * @param {object} params.req the http request object
+ * @param {object} params.res the http response object
+ * @param {ActionRequestContext} params.actionRequestContext the ActionRequestContext object
+ * @param {object} params.logger the logger object
+ * @returns {void}
+ */
+async function handleAction ({ req, res, actionRequestContext, logger }) {
+  if (!isWebAction(actionRequestContext.action)) {
+    return httpStatusResponse({ statusCode: 404, res, logger })
+  }
+  if (isRawWebAction(actionRequestContext.action)) {
+    logger.warn('TODO: raw web action handling is not implemented yet')
+  }
+
+  // check if action is protected
+  if (actionRequestContext.action?.annotations?.['require-adobe-auth']) {
+    // check if user is authenticated
+    if (!req.headers.authorization) {
+      return httpStatusResponse({ statusCode: 401, res, logger })
+    }
+  }
+  // todo: what can we learn from action.annotations?
+  // todo: action.include?
+  // todo: rules, triggers, ...
+  // generate an activationID just like openwhisk
+  process.env.__OW_ACTIVATION_ID = crypto.randomBytes(16).toString('hex')
+  delete require.cache[actionRequestContext.action.function]
+  const actionFunction = require(actionRequestContext.action.function).main
+
+  const params = {
+    __ow_body: req.body,
+    __ow_headers: req.headers,
+    __ow_path: actionRequestContext.owPath,
+    __ow_query: req.query,
+    __ow_method: req.method.toLowerCase(),
+    ...req.query,
+    ...actionRequestContext.action.inputs,
+    ...(req.is('application/json') ? req.body : {})
+  }
+  params.__ow_headers['x-forwarded-for'] = '127.0.0.1'
+  logger.debug('params = ', params)
+
+  if (actionFunction) {
+    try {
+      process.env.__OW_ACTION_NAME = actionRequestContext.actionName
+      const response = await actionFunction(params)
+      delete process.env.__OW_ACTION_NAME
+      const headers = response.headers || {}
+      const statusCode = (response.error?.statusCode ?? response.statusCode) || 200
+
+      logger.info(`${statusCode} ${statusCodeMessage(statusCode)}`)
+
+      return res
+        .set(headers || {})
+        .status(statusCode || 200)
+        .send(response.error?.body ?? response.body)
+    } catch (e) {
+      const statusCode = 500
+      logger.error(`${statusCode} ${statusCodeMessage(statusCode)}`)
+      logger.error(e) // log the stacktrace
+
+      return res
+        .status(statusCode)
+        .send({ error: e.message }) // only send the message, not the stacktrace
+    }
+  } else {
+    const statusMessage = `${actionRequestContext.actionName} action not found, or does not export main`
+    return httpStatusResponse({ statusCode: 401, statusMessage, res, logger })
+  }
+}
+
+/**
+ * Sends a http status response according to the parameters.
+ *
+ * @param {object} params the parameters
+ * @param {number} params.statusCode the status code
+ * @param {string} [params.statusMessage] the status message
+ * @param {object} params.res the http response object
+ * @param {object} params.logger the logger object
+ */
+function httpStatusResponse ({ statusCode, statusMessage = statusCodeMessage(statusCode), res, logger }) {
+  logger.error(`${statusCode} ${statusMessage}`)
+
+  res
     .status(statusCode)
-    .send({ error: statusCodeMessage(statusCode) })
+    .send({ error: statusMessage })
 }
 
 /**
@@ -234,162 +368,33 @@ async function serveNonWebAction (req, res, _next, actionConfig) {
  *
  * @param {*} req the http request
  * @param {*} res the http response
- * @param {*} _next the next http handler
  * @param {*} actionConfig the action configuration
  * @returns {Response} the response
  */
-async function serveWebAction (req, res, _next, actionConfig) {
+async function serveWebAction (req, res, actionConfig) {
   const url = req.params[0]
-  const [packageName, actionName, ...path] = url.split('/')
+  const [packageName, actionName, ...restofPath] = url.split('/')
   const action = actionConfig[packageName]?.actions[actionName]
+  const owPath = restofPath.join('/')
+
+  const actionRequestContext = {
+    action,
+    packageName,
+    actionName,
+    owPath,
+    actionConfig
+  }
 
   const actionLogger = coreLogger(`serveWebAction ${actionName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
 
-  if (!action) {
-    // action could be a sequence ... todo: refactor these 2 paths to 1 action runner
+  if (action) {
+    await handleAction({ req, res, actionRequestContext, logger: actionLogger })
+  } else { // could be a sequence
     const sequence = actionConfig[packageName]?.sequences?.[actionName]
     if (sequence) {
-      const actions = sequence.actions?.split(',')
-      const params = {
-        __ow_body: req.body,
-        __ow_headers: req.headers,
-        __ow_path: path.join('/'),
-        __ow_query: req.query,
-        __ow_method: req.method.toLowerCase(),
-        ...req.query,
-        ...action?.inputs,
-        ...(req.is('application/json') ? req.body : {})
-      }
-      params.__ow_headers['x-forwarded-for'] = '127.0.0.1'
-      actionLogger.debug('params = ', params)
-      let response = null
-      actionLogger.debug('this is a sequence')
-      // for each action in sequence, serveAction
-      for (let i = 0; i < actions.length; i++) {
-        const actionName = actions[i].trim()
-        const action = actionConfig[packageName]?.actions[actionName]
-        if (action) {
-          if (!isWebAction(action)) {
-            const statusCode = 404
-            actionLogger.error(`${statusCode} ${statusCodeMessage(statusCode)}`)
-            return res
-              .status(statusCode)
-              .send({ error: statusCodeMessage(statusCode) })
-          }
-          if (isRawWebAction(action)) {
-            actionLogger.warn('TODO: raw web action handling is not implemented yet')
-          }
-
-          process.env.__OW_ACTIVATION_ID = crypto.randomBytes(16).toString('hex')
-          delete require.cache[action.function]
-          const actionFunction = require(action.function).main
-          if (actionFunction) {
-            response = await actionFunction(response ?? params)
-            if (response.statusCode === 404) {
-              throw response
-            }
-          } else {
-            const message = `${actionName} action not found, or does not export main`
-            actionLogger.error(message)
-
-            return res
-              .status(500)
-              .send({ error: message })
-          }
-        }
-      }
-
-      const headers = response.headers || {}
-      const statusCode = response.statusCode || 200
-      actionLogger.info(`${statusCode} ${statusCodeMessage(statusCode)}`)
-
-      return res
-        .set(headers || {})
-        .status(statusCode || 200)
-        .send(response.body)
+      await handleSequence(req, res, sequence, actionConfig, actionRequestContext, actionLogger)
     } else {
-      const statusCode = 404
-      actionLogger.error(`${statusCode} ${statusCodeMessage(statusCode)}`)
-
-      return res
-        .status(statusCode)
-        .send({ error: statusCodeMessage(statusCode) })
-    }
-  } else {
-    if (!isWebAction(action)) {
-      const statusCode = 404
-      actionLogger.error(`${statusCode} ${statusCodeMessage(statusCode)}`)
-      return res
-        .status(statusCode)
-        .send({ error: statusCodeMessage(statusCode) })
-    }
-    if (isRawWebAction(action)) {
-      actionLogger.warn('TODO: raw web action handling is not implemented yet')
-    }
-
-    // check if action is protected
-    if (action?.annotations?.['require-adobe-auth']) {
-      // check if user is authenticated
-      if (!req.headers.authorization) {
-        const statusCode = 401
-        actionLogger.error(`${statusCode} ${statusCodeMessage(statusCode)}`)
-
-        return res
-          .status(statusCode)
-          .send({ error: statusCodeMessage(statusCode) })
-      }
-    }
-    // todo: what can we learn from action.annotations?
-    // todo: action.include?
-    // todo: rules, triggers, ...
-    // generate an activationID just like openwhisk
-    process.env.__OW_ACTIVATION_ID = crypto.randomBytes(16).toString('hex')
-    delete require.cache[action.function]
-    const actionFunction = require(action.function).main
-
-    const params = {
-      __ow_body: req.body,
-      __ow_headers: req.headers,
-      __ow_path: path.join('/'),
-      __ow_query: req.query,
-      __ow_method: req.method.toLowerCase(),
-      ...req.query,
-      ...action.inputs,
-      ...(req.is('application/json') ? req.body : {})
-    }
-    params.__ow_headers['x-forwarded-for'] = '127.0.0.1'
-    actionLogger.debug('params = ', params)
-
-    if (actionFunction) {
-      try {
-        process.env.__OW_ACTION_NAME = actionName
-        const response = await actionFunction(params)
-        delete process.env.__OW_ACTION_NAME
-        const headers = response.headers || {}
-        const statusCode = response.statusCode || 200
-
-        actionLogger.info(`${statusCode} ${statusCodeMessage(statusCode)}`)
-
-        return res
-          .set(headers || {})
-          .status(statusCode || 200)
-          .send(response.body)
-      } catch (e) {
-        const statusCode = 500
-        actionLogger.error(`${statusCode} ${statusCodeMessage(statusCode)}`)
-        actionLogger.error(e) // log the stacktrace
-
-        return res
-          .status(500)
-          .send({ error: e.message }) // only send the message, not the stacktrace
-      }
-    } else {
-      const message = `${actionName} action not found, or does not export main`
-      actionLogger.error(message)
-
-      return res
-        .status(500)
-        .send({ error: message })
+      return httpStatusResponse({ statusCode: 404, res, logger: actionLogger })
     }
   }
 }
