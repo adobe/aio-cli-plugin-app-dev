@@ -19,6 +19,12 @@ const {
   DEV_API_WEB_PREFIX = `${DEV_API_PREFIX}/web`
 } = process.env
 
+const BUNDLE_OPTIONS = {
+  shouldDisableCache: true,
+  shouldContentHash: true,
+  shouldOptimize: false
+}
+
 module.exports = {
   SERVER_DEFAULT_PORT: parseInt(SERVER_DEFAULT_PORT, 10), // parse any env override
   BUNDLER_DEFAULT_PORT: parseInt(BUNDLER_DEFAULT_PORT, 10), // parse any env override
@@ -29,5 +35,6 @@ module.exports = {
   DEFAULT_LAUNCH_PREFIX: 'https://experience.adobe.com/?devMode=true#/custom-apps/?localDevUrl=',
   STAGE_LAUNCH_PREFIX: 'https://experience-stage.adobe.com/?devMode=true#/custom-apps/?localDevUrl=',
   PRIVATE_KEY_PATH: `${DEV_KEYS_DIR}/private.key`,
-  PUB_CERT_PATH: `${DEV_KEYS_DIR}/cert-pub.crt`
+  PUB_CERT_PATH: `${DEV_KEYS_DIR}/cert-pub.crt`,
+  BUNDLE_OPTIONS
 }

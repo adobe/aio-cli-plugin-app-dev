@@ -22,7 +22,7 @@ const coreConfig = require('@adobe/aio-lib-core-config')
 const aioLogger = require('@adobe/aio-lib-core-logging')('@adobe/aio-cli-plugin-app-dev:index', { level: process.env.LOG_LEVEL, provider: 'winston' })
 
 const BaseCommand = require('../../../BaseCommand')
-const runDev = require('../../../lib/run-dev')
+const { runDev } = require('../../../lib/run-dev')
 const { runInProcess } = require('../../../lib/app-helper')
 
 const APP_EVENT_PRE_APP_DEV = 'pre-app-dev'
