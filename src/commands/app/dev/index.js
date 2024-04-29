@@ -114,7 +114,7 @@ class Dev extends BaseCommand {
     }
 
     const inprocHook = this.config.runHook.bind(this.config)
-    const { frontendUrl, actionUrls } = await runDev(config, runOptions, inprocHook)
+    const { frontendUrl, actionUrls } = await runDev(runOptions, config, inprocHook)
 
     // fire post hook
     try {

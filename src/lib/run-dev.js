@@ -9,14 +9,27 @@ the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR REPRESENTA
 OF ANY KIND, either express or implied. See the License for the specific language
 governing permissions and limitations under the License.
 */
-/* eslint-disable no-template-curly-in-string */
+
 const aioLogger = require('@adobe/aio-lib-core-logging')('@adobe/aio-cli-plugin-app-dev:run-dev', { level: process.env.LOG_LEVEL, provider: 'winston' })
-const serve = require('./serve')
+const { serve } = require('./serve')
 const cloneDeep = require('lodash.clonedeep')
 const Cleanup = require('./cleanup')
 
-/** @private */
-async function runDev (config, options = {}, _inprocHook) {
+/**
+ * @typedef {object} RunDevReturnObject
+ * @property {string} frontendUrl the url for the front-end (if any)
+ * @property {object} actionUrls the object with a list of action urls
+ */
+
+/**
+ * The serve function that runs the http server to serve the actions, and the web source.
+ *
+ * @param {object} options the options for the http server
+ * @param {object} config the config for the app
+ * @param {object} _inprocHookRunner the in-process hook runner for the app
+ * @returns {RunDevReturnObject} the object returned
+ */
+async function runDev (options = {}, config, _inprocHookRunner) {
   /* parcel bundle options */
   const bundleOptions = {
     shouldDisableCache: true,
@@ -27,7 +40,6 @@ async function runDev (config, options = {}, _inprocHook) {
   aioLogger.debug('config.manifest is', JSON.stringify(config.manifest.full.packages, null, 2))
 
   const devConfig = cloneDeep(config)
-  devConfig.envFile = '.env'
   const cleanup = new Cleanup()
 
   try {
@@ -36,7 +48,7 @@ async function runDev (config, options = {}, _inprocHook) {
       parcel: options.parcel
     }
 
-    const { frontendUrl, actionUrls, serverCleanup } = await serve(serveOptions, devConfig, _inprocHook)
+    const { frontendUrl, actionUrls, serverCleanup } = await serve(serveOptions, devConfig, _inprocHookRunner)
     cleanup.add(() => serverCleanup(), 'cleaning up serve...')
 
     cleanup.wait()

@@ -22,6 +22,7 @@ const rtLib = require('@adobe/aio-lib-runtime')
 const coreLogger = require('@adobe/aio-lib-core-logging')
 const { SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX } = require('./constants')
 const { getReasonPhrase } = require('http-status-codes')
+
 /**
  * @typedef {object} ActionRequestContext
  * @property {object} action the action object
@@ -31,7 +32,22 @@ const { getReasonPhrase } = require('http-status-codes')
  * @property {object} actionConfig the whole action config
  */
 
-module.exports = async function serve (options, devConfig, _inprocHook) {
+/**
+ * @typedef {object} ServeReturnObject
+ * @property {string} frontendUrl the url for the front-end (if any)
+ * @property {object} actionUrls the object with a list of action urls
+ * @property {Function} serverCleanup the function to clean up the http server resources
+ */
+
+/**
+ * The serve function that runs the http server to serve the actions, and the web source.
+ *
+ * @param {object} options the options for the http server
+ * @param {object} devConfig the config for the app
+ * @param {object} _inprocHookRunner the in-process hook runner for the app
+ * @returns {ServeReturnObject} the object returned
+ */
+async function serve (options, devConfig, _inprocHookRunner) {
   const serveLogger = coreLogger('serve', { level: process.env.LOG_LEVEL, provider: 'winston' })
 
   const actionConfig = devConfig.manifest.full.packages
@@ -382,4 +398,15 @@ async function serveWebAction (req, res, actionConfig) {
       return httpStatusResponse({ statusCode: 404, res, logger: actionLogger })
     }
   }
+}
+
+module.exports = {
+  serve,
+  serveWebAction,
+  serveNonWebAction,
+  httpStatusResponse,
+  handleAction,
+  handleSequence,
+  isRawWebAction,
+  isWebAction
 }

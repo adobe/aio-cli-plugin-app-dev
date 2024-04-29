@@ -11,8 +11,8 @@ governing permissions and limitations under the License.
 */
 
 /* eslint-disable no-unused-vars */
-const TheCommand = require('../../../src/commands/app/dev')
-const BaseCommand = require('../../../src/BaseCommand')
+const TheCommand = require('../../../../src/commands/app/dev')
+const BaseCommand = require('../../../../src/BaseCommand')
 
 test('TODO: completed at a future date', () => {
   expect('TODO').toEqual('completed at a future date')
