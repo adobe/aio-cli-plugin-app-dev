@@ -209,7 +209,7 @@ function statusCodeMessage (statusCode) {
  * @returns {boolean} true if it is a web action
  */
 function isWebAction (action) {
-  const toBoolean = (value) => (value !== 'no' && value !== 'false' && value !== false)
+  const toBoolean = (value) => (value !== 'no' && value !== 'false' && value !== false && value !== undefined)
 
   const webExportValue = action?.annotations?.['web-export']
   const webValue = action?.web
@@ -259,7 +259,7 @@ async function serveNonWebAction (req, res) {
  * @returns {void}
  */
 async function handleSequence ({ req, res, sequence, actionRequestContext, logger }) {
-  const actions = sequence.actions?.split(',')
+  const actions = sequence?.actions?.split(',') ?? []
   const params = {
     __ow_body: req.body,
     __ow_headers: req.headers,
@@ -276,9 +276,10 @@ async function handleSequence ({ req, res, sequence, actionRequestContext, logge
   // for each action in sequence, serveAction
   for (let i = 0; i < actions.length; i++) {
     const actionName = actions[i].trim()
-    const action = actionRequestContext.actionConfig[actionRequestContext.packageName]?.actions[actionName]
+    const action = actionRequestContext.actionConfig?.[actionRequestContext.packageName]?.actions[actionName]
+    const context = { action, actionName, owPath: actionRequestContext.owPath }
     if (action) {
-      await handleAction({ req, res, actionRequestContext, logger })
+      await handleAction({ req, res, actionRequestContext: context, logger })
     } else {
       return httpStatusResponse({ statusCode: 404, statusMessage: `${actionName} in sequence not found`, res, logger })
     }
@@ -296,17 +297,10 @@ async function handleSequence ({ req, res, sequence, actionRequestContext, logge
  * @returns {void}
  */
 async function handleAction ({ req, res, actionRequestContext, logger }) {
-  if (!isWebAction(actionRequestContext.action)) {
-    return httpStatusResponse({ statusCode: 404, res, logger })
-  }
-  if (isRawWebAction(actionRequestContext.action)) {
-    logger.warn('TODO: raw web action handling is not implemented yet')
-  }
-
   // check if action is protected
   if (actionRequestContext.action?.annotations?.['require-adobe-auth']) {
     // check if user is authenticated
-    if (!req.headers.authorization) {
+    if (!req.headers?.authorization) {
       return httpStatusResponse({ statusCode: 401, res, logger })
     }
   }
@@ -316,7 +310,7 @@ async function handleAction ({ req, res, actionRequestContext, logger }) {
   // generate an activationID just like openwhisk
   process.env.__OW_ACTIVATION_ID = crypto.randomBytes(16).toString('hex')
   delete require.cache[actionRequestContext.action.function]
-  const actionFunction = require(actionRequestContext.action.function).main
+  const actionFunction = require(actionRequestContext.action.function)?.main
 
   const params = {
     __ow_body: req.body,
@@ -336,15 +330,15 @@ async function handleAction ({ req, res, actionRequestContext, logger }) {
       process.env.__OW_ACTION_NAME = actionRequestContext.actionName
       const response = await actionFunction(params)
       delete process.env.__OW_ACTION_NAME
-      const headers = response.headers || {}
-      const statusCode = (response.error?.statusCode ?? response.statusCode) || 200
+      const headers = response?.headers || {}
+      const statusCode = (response?.error?.statusCode ?? response?.statusCode) || 200
 
       logger.info(`${statusCode} ${statusCodeMessage(statusCode)}`)
 
       return res
         .set(headers || {})
         .status(statusCode || 200)
-        .send(response.error?.body ?? response.body)
+        .send(response?.error?.body ?? response?.body)
     } catch (e) {
       const statusCode = 500
       logger.error(`${statusCode} ${statusCodeMessage(statusCode)}`)
@@ -370,11 +364,19 @@ async function handleAction ({ req, res, actionRequestContext, logger }) {
  * @param {object} params.logger the logger object
  */
 function httpStatusResponse ({ statusCode, statusMessage = statusCodeMessage(statusCode), res, logger }) {
-  logger.error(`${statusCode} ${statusMessage}`)
+  const isError = statusCode >= 400
 
-  res
-    .status(statusCode)
-    .send({ error: statusMessage })
+  if (isError) {
+    logger.error(`${statusCode} ${statusMessage}`)
+    res
+      .status(statusCode)
+      .send({ error: statusMessage })
+  } else {
+    logger.info(`${statusCode} ${statusMessage}`)
+    res
+      .status(statusCode)
+      .send()
+  }
 }
 
 /**
@@ -402,6 +404,13 @@ async function serveWebAction (req, res, actionConfig) {
   const actionLogger = coreLogger(`serveWebAction ${actionName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
 
   if (action) {
+    if (!isWebAction(action)) {
+      return httpStatusResponse({ statusCode: 404, res, logger: actionLogger })
+    }
+    if (isRawWebAction(action)) {
+      actionLogger.warn('TODO: raw web action handling is not implemented yet')
+    }
+
     await handleAction({ req, res, actionRequestContext, logger: actionLogger })
   } else { // could be a sequence
     const sequence = actionConfig[packageName]?.sequences?.[actionName]
@@ -420,6 +429,7 @@ module.exports = {
   httpStatusResponse,
   handleAction,
   handleSequence,
+  statusCodeMessage,
   isRawWebAction,
   isWebAction
 }

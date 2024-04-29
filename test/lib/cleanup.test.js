@@ -12,15 +12,6 @@ governing permissions and limitations under the License.
 
 const Cleanup = require('../../src/lib/cleanup')
 
-/** @private */
-function mockLogger () {
-  return {
-    debug: jest.fn(),
-    error: jest.fn()
-  }
-}
-jest.mock('@adobe/aio-lib-core-logging', () => mockLogger)
-
 process.exit = jest.fn()
 process.on = jest.fn()
 
