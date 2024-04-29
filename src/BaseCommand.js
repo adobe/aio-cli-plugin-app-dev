@@ -127,6 +127,6 @@ BaseCommand.flags = {
   version: Flags.boolean({ description: 'Show version' })
 }
 
-BaseCommand.args = []
+BaseCommand.args = {}
 
 module.exports = BaseCommand

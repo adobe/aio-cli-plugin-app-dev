@@ -1,10 +1,19 @@
 {
     "extends": "@adobe/eslint-config-aio-lib-config",
+    "globals": {
+      "fixturePath": true,
+      "fixtureFile": true,
+      "fixtureJson": true
+    },
+    "settings": {
+        "jsdoc": {
+            "ignorePrivate": true
+        }
+    },
     "parserOptions": {
         "ecmaVersion": "latest"
     },
     "rules": {
-        "node/no-unpublished-require": 0,
         "jsdoc/tag-lines": [
             // The Error level should be `error`, `warn`, or `off` (or 2, 1, or 0)
             "error",
@@ -13,10 +22,5 @@
               "startLines": null
             }
         ]
-    },
-    "settings": {
-        "jsdoc": {
-            "ignorePrivate": true
-        }
-    }
-}
+      }
+  }

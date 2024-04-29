@@ -10,4 +10,10 @@ OF ANY KIND, either express or implied. See the License for the specific languag
 governing permissions and limitations under the License.
 */
 
-const appHelper = require('../../src/lib/app-helper')
+const { runInProcess, runScript, writeConfig } = require('../../src/lib/app-helper')
+
+test('exports', () => {
+  expect(runInProcess).toBeDefined()
+  expect(runScript).toBeDefined()
+  expect(writeConfig).toBeDefined()
+})

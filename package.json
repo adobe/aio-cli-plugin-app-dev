@@ -34,6 +34,7 @@
   },
   "devDependencies": {
     "@adobe/eslint-config-aio-lib-config": "^4.0.0",
+    "eol": "^0.9.1",
     "eslint": "^8.57.0",
     "eslint-config-oclif": "^4.0.0",
     "eslint-config-standard": "^17.1.0",

@@ -11,3 +11,8 @@ governing permissions and limitations under the License.
 */
 
 const constants = require('../../src/lib/constants')
+
+test('exports', () => {
+  // TODO:
+  expect(constants.BUNDLE_OPTIONS).toBeDefined()
+})

@@ -10,4 +10,18 @@ OF ANY KIND, either express or implied. See the License for the specific languag
 governing permissions and limitations under the License.
 */
 
-const runDev = require('../../src/lib/run-dev')
+const {
+  runDev, serveWebAction, serveNonWebAction, httpStatusResponse,
+  handleAction, handleSequence, isRawWebAction, isWebAction
+} = require('../../src/lib/run-dev')
+
+test('exports', () => {
+  expect(runDev).toBeDefined()
+  expect(serveWebAction).toBeDefined()
+  expect(serveNonWebAction).toBeDefined()
+  expect(httpStatusResponse).toBeDefined()
+  expect(handleAction).toBeDefined()
+  expect(handleSequence).toBeDefined()
+  expect(isRawWebAction).toBeDefined()
+  expect(isWebAction).toBeDefined()
+})
