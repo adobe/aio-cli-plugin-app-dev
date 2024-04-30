@@ -23,7 +23,6 @@ const rtLib = require('@adobe/aio-lib-runtime')
 const coreLogger = require('@adobe/aio-lib-core-logging')
 const { getReasonPhrase } = require('http-status-codes')
 
-const Cleanup = require('./cleanup')
 const utils = require('./app-helper')
 const { SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX, BUNDLE_OPTIONS } = require('./constants')
 
@@ -172,7 +171,11 @@ async function runDev (runOptions = {}, config, _inprocHookRunner) {
     }
     serveLogger.info('server running on port : ', serverPort)
   })
-  const frontendUrl = `${httpsSettings ? 'https:' : 'http:'}//localhost:${serverPort}`
+
+  let frontendUrl
+  if (hasFrontend) {
+    frontendUrl = `${httpsSettings ? 'https:' : 'http:'}//localhost:${serverPort}`
+  }
 
   const serverCleanup = async () => {
     serveLogger.debug('shutting down http server ...')
