@@ -245,8 +245,130 @@ test('serveNonWebAction', () => {
   expect(mockSend).toHaveBeenCalledWith({ error: 'Unauthorized' })
 })
 
-test('serveWebAction', () => {
-  // TODO:
+describe('serveWebAction', () => {
+  test('action found, not web action', async () => {
+    const mockStatus = jest.fn()
+    const mockSend = jest.fn()
+
+    const res = createRes({ mockStatus, mockSend })
+    const req = createReq({ url: 'foo/bar' })
+    const packageName = 'foo'
+
+    const actionConfig = {
+      [packageName]: {
+        actions: {
+          bar: {
+            function: fixturePath('actions/simpleAction.js')
+          }
+        }
+      }
+    }
+
+    await serveWebAction(req, res, actionConfig)
+    expect(mockSend).toHaveBeenCalledTimes(1)
+    expect(mockStatus).toHaveBeenCalledWith(404)
+  })
+
+  test('action found, is web action', async () => {
+    const mockStatus = jest.fn()
+    const mockSend = jest.fn()
+
+    const res = createRes({ mockStatus, mockSend })
+    const req = createReq({ url: 'foo/bar' })
+    const packageName = 'foo'
+
+    const actionConfig = {
+      [packageName]: {
+        actions: {
+          bar: {
+            function: fixturePath('actions/simpleAction.js'),
+            web: true
+          }
+        }
+      }
+    }
+
+    await serveWebAction(req, res, actionConfig)
+    expect(mockSend).toHaveBeenCalledTimes(1)
+    expect(mockStatus).toHaveBeenCalledWith(200)
+    expect(mockLogger.warn).not.toHaveBeenCalled()
+  })
+
+  test('action found, is raw web action', async () => {
+    const mockStatus = jest.fn()
+    const mockSend = jest.fn()
+
+    const res = createRes({ mockStatus, mockSend })
+    const req = createReq({ url: 'foo/bar' })
+    const packageName = 'foo'
+
+    const actionConfig = {
+      [packageName]: {
+        actions: {
+          bar: {
+            function: fixturePath('actions/simpleAction.js'),
+            web: 'raw'
+          }
+        }
+      }
+    }
+
+    await serveWebAction(req, res, actionConfig)
+    expect(mockSend).toHaveBeenCalledTimes(1)
+    expect(mockStatus).toHaveBeenCalledWith(200)
+    expect(mockLogger.warn).toHaveBeenCalledWith('raw web action handling is not implemented yet')
+  })
+
+  test('action not found, is sequence', async () => {
+    const mockStatus = jest.fn()
+    const mockSend = jest.fn()
+
+    const res = createRes({ mockStatus, mockSend })
+    const req = createReq({ url: 'foo/mysequence' })
+    const packageName = 'foo'
+
+    const actionConfig = {
+      [packageName]: {
+        sequences: {
+          mysequence: {
+            actions: 'bar'
+          }
+        },
+        actions: {
+          bar: {
+            function: fixturePath('actions/simpleAction.js')
+          }
+        }
+      }
+    }
+
+    await serveWebAction(req, res, actionConfig)
+    expect(mockSend).toHaveBeenCalledTimes(1)
+    expect(mockStatus).toHaveBeenCalledWith(200)
+  })
+
+  test('action not found, is not sequence', async () => {
+    const mockStatus = jest.fn()
+    const mockSend = jest.fn()
+
+    const res = createRes({ mockStatus, mockSend })
+    const req = createReq({ url: 'foo/not_an_action' })
+    const packageName = 'foo'
+
+    const actionConfig = {
+      [packageName]: {
+        actions: {
+          bar: {
+            function: fixturePath('actions/simpleAction.js')
+          }
+        }
+      }
+    }
+
+    await serveWebAction(req, res, actionConfig)
+    expect(mockSend).toHaveBeenCalledTimes(1)
+    expect(mockStatus).toHaveBeenCalledWith(404)
+  })
 })
 
 describe('handleSequence', () => {
@@ -448,5 +570,21 @@ describe('handleSequence', () => {
     await handleSequence({ req, res, sequence, actionRequestContext, logger: mockLogger })
     expect(mockSend).toHaveBeenCalledTimes(1)
     expect(mockStatus).toHaveBeenCalledWith(401)
+  })
+})
+
+describe('runDev', () => {
+  test('no front end, has back end', async () => {
+    const config = {
+      app: {
+        hasFrontend: false,
+        hasBackend: true
+      }
+    }
+    const runOptions = {
+    }
+    const hookRunner = () => {}
+
+    await runDev(runOptions, config, hookRunner)
   })
 })

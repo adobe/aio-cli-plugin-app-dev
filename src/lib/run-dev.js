@@ -10,7 +10,6 @@ OF ANY KIND, either express or implied. See the License for the specific languag
 governing permissions and limitations under the License.
 */
 
-const aioLogger = require('@adobe/aio-lib-core-logging')('@adobe/aio-cli-plugin-app-dev:run-dev', { level: process.env.LOG_LEVEL, provider: 'winston' })
 const cloneDeep = require('lodash.clonedeep')
 const express = require('express')
 const fs = require('fs-extra')
@@ -27,6 +26,8 @@ const { getReasonPhrase } = require('http-status-codes')
 const Cleanup = require('./cleanup')
 const utils = require('./app-helper')
 const { SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX, BUNDLE_OPTIONS } = require('./constants')
+
+/* global Request, Response */
 
 /**
  * @typedef {object} ActionRequestContext
@@ -52,11 +53,8 @@ const { SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_P
  * @returns {RunDevReturnObject} the object returned
  */
 async function runDev (runOptions = {}, config, _inprocHookRunner) {
-  aioLogger.debug('config.manifest is', JSON.stringify(config.manifest.full.packages, null, 2))
-
   const bundleOptions = cloneDeep(BUNDLE_OPTIONS)
   const devConfig = cloneDeep(config)
-  const cleanup = new Cleanup()
 
   const serveLogger = coreLogger('serve', { level: process.env.LOG_LEVEL, provider: 'winston' })
   serveLogger.debug('config.manifest is', JSON.stringify(devConfig.manifest.full.packages, null, 2))
@@ -183,12 +181,10 @@ async function runDev (runOptions = {}, config, _inprocHookRunner) {
     await subscription?.unsubscribe()
   }
 
-  cleanup.add(() => serverCleanup(), 'cleaning up serve...')
-  cleanup.wait()
-
   return {
     frontendUrl,
-    actionUrls
+    actionUrls,
+    serverCleanup
   }
 }
 
@@ -235,9 +231,9 @@ function isRawWebAction (action) {
  * Express path handler to handle non-web action API calls.
  * Openwhisk returns 401 when you call a non-web action via HTTP GET.
  *
- * @param {*} req the http request
- * @param {*} res the http response
- * @returns {Response} the response
+ * @param {Request} req the http request
+ * @param {Response} res the http response
+ * @returns {void}
  */
 async function serveNonWebAction (req, res) {
   const url = req.params[0]
@@ -290,11 +286,11 @@ async function handleSequence ({ req, res, sequence, actionRequestContext, logge
  * Handle an action.
  *
  * @param {object} params the parameters
- * @param {object} params.req the http request object
- * @param {object} params.res the http response object
+ * @param {Request} params.req the http request object
+ * @param {Response} params.res the http response object
  * @param {ActionRequestContext} params.actionRequestContext the ActionRequestContext object
  * @param {object} params.logger the logger object
- * @returns {void}
+ * @returns {Response} the http response object
  */
 async function handleAction ({ req, res, actionRequestContext, logger }) {
   // check if action is protected
@@ -360,20 +356,21 @@ async function handleAction ({ req, res, actionRequestContext, logger }) {
  * @param {object} params the parameters
  * @param {number} params.statusCode the status code
  * @param {string} [params.statusMessage] the status message
- * @param {object} params.res the http response object
+ * @param {Response} params.res the http response object
  * @param {object} params.logger the logger object
+ * @returns {Response} the response
  */
 function httpStatusResponse ({ statusCode, statusMessage = statusCodeMessage(statusCode), res, logger }) {
   const isError = statusCode >= 400
 
   if (isError) {
     logger.error(`${statusCode} ${statusMessage}`)
-    res
+    return res
       .status(statusCode)
       .send({ error: statusMessage })
   } else {
     logger.info(`${statusCode} ${statusMessage}`)
-    res
+    return res
       .status(statusCode)
       .send()
   }
@@ -408,14 +405,14 @@ async function serveWebAction (req, res, actionConfig) {
       return httpStatusResponse({ statusCode: 404, res, logger: actionLogger })
     }
     if (isRawWebAction(action)) {
-      actionLogger.warn('TODO: raw web action handling is not implemented yet')
+      actionLogger.warn('raw web action handling is not implemented yet')
     }
 
     await handleAction({ req, res, actionRequestContext, logger: actionLogger })
   } else { // could be a sequence
     const sequence = actionConfig[packageName]?.sequences?.[actionName]
     if (sequence) {
-      await handleSequence(req, res, sequence, actionConfig, actionRequestContext, actionLogger)
+      await handleSequence({ req, res, sequence, actionConfig, actionRequestContext, logger: actionLogger })
     } else {
       return httpStatusResponse({ statusCode: 404, res, logger: actionLogger })
     }

@@ -28,6 +28,7 @@ const { runInProcess } = require('../../../lib/app-helper')
 const APP_EVENT_PRE_APP_DEV = 'pre-app-dev'
 const APP_EVENT_POST_APP_DEV = 'post-app-dev'
 const { PUB_CERT_PATH, PRIVATE_KEY_PATH, DEV_KEYS_DIR, DEV_KEYS_CONFIG_KEY, SERVER_DEFAULT_PORT, DEV_API_WEB_PREFIX } = require('../../../lib/constants')
+const Cleanup = require('../../../lib/cleanup')
 
 class Dev extends BaseCommand {
   async run () {
@@ -114,7 +115,10 @@ class Dev extends BaseCommand {
     }
 
     const inprocHook = this.config.runHook.bind(this.config)
-    const { frontendUrl, actionUrls } = await runDev(runOptions, config, inprocHook)
+    const cleanup = new Cleanup()
+    const { frontendUrl, actionUrls, serverCleanup } = await runDev(runOptions, config, inprocHook)
+    cleanup.add(() => serverCleanup(), 'cleaning up serve...')
+    cleanup.wait()
 
     // fire post hook
     try {
