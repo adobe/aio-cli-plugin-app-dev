@@ -16,14 +16,35 @@ const {
   invokeAction, invokeSequence, statusCodeMessage, isRawWebAction, isWebAction
 } = require('../../src/lib/run-dev')
 
+jest.useFakeTimers()
+
 jest.mock('connect-livereload')
-jest.mock('livereload')
 jest.mock('fs-extra')
+
+jest.mock('livereload', () => {
+  return {
+    createServer: jest.fn(() => {
+      return {
+        watch: jest.fn(),
+        refresh: jest.fn(),
+        server: {
+          once: jest.fn((_, fn) => {
+            fn() // call right away, coverage
+            jest.runOnlyPendingTimers()
+          })
+        }
+      }
+    })
+  }
+})
+
 jest.mock('node:https', () => {
   return {
     createServer: jest.fn(() => {
       return {
-        listen: jest.fn(),
+        listen: jest.fn((_, fn) => {
+          fn() // call right away, coverage
+        }),
         close: jest.fn()
       }
     })
@@ -590,47 +611,83 @@ describe('invokeSequence', () => {
   })
 })
 
-describe('runDev', () => {
-  test('no front end, has back end', async () => {
-    const config = {
-      ow: {
-        namespace: 'mynamespace',
-        auth: 'myauthkey',
-        defaultApihost: 'https://localhost',
-        apihost: 'https://localhost'
-      },
-      app: {
-        hostname: 'https://localhost',
-        defaultHostname: 'https://adobeio-static.net',
-        hasFrontend: false,
-        hasBackend: true
-      },
-      manifest: {
-        full: {
-          packages: {
-            mypackage: {
-              actions: {
-                myaction: { function: fixturePath('actions/simpleAction.js') }
-              }
-            }
+const createConfig = ({ distDev = 'dist', hasFrontend, hasBackend, packageName = 'mypackage', actions = {}, sequences = {} }) => {
+  return {
+    web: {
+      distDev
+    },
+    ow: {
+      namespace: 'mynamespace',
+      auth: 'myauthkey',
+      defaultApihost: 'https://localhost',
+      apihost: 'https://localhost'
+    },
+    app: {
+      hostname: 'https://localhost',
+      defaultHostname: 'https://adobeio-static.net',
+      hasFrontend,
+      hasBackend
+    },
+    manifest: {
+      full: {
+        packages: {
+          [packageName]: {
+            actions,
+            sequences
           }
         }
       }
     }
-    const runOptions = {
-      parcel: {
-        https: {
-          cert: 'my-cert',
-          key: 'my-key'
-        }
+  }
+}
+
+const createRunOptions = ({ cert, key }) => {
+  return {
+    parcel: {
+      https: {
+        cert,
+        key
       }
     }
+  }
+}
+
+describe('runDev', () => {
+  test('no front end, has back end', async () => {
+    const config = createConfig({
+      hasFrontend: false,
+      hasBackend: true,
+      packageName: 'mypackage',
+      actions: {
+        myaction: { function: fixturePath('actions/simpleAction.js') }
+      }
+    })
+    const runOptions = createRunOptions({ cert: 'my-cert', key: 'my-key' })
     const hookRunner = () => {}
 
     const { frontendUrl, actionUrls, serverCleanup } = await runDev(runOptions, config, hookRunner)
     await serverCleanup()
 
     expect(frontendUrl).not.toBeDefined()
+    expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
+  })
+
+  test('has front end, has back end', async () => {
+    const config = createConfig({
+      hasFrontend: true,
+      hasBackend: true,
+      packageName: 'mypackage',
+      actions: {
+        myaction: { function: fixturePath('actions/simpleAction.js') }
+      }
+    })
+    const runOptions = createRunOptions({ cert: 'my-cert', key: 'my-key' })
+    const hookRunner = () => {}
+
+    const { frontendUrl, actionUrls, serverCleanup } = await runDev(runOptions, config, hookRunner)
+    await serverCleanup()
+
+    expect(frontendUrl).toBeDefined()
     expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
   })
 })
