@@ -13,8 +13,25 @@ governing permissions and limitations under the License.
 const mockLogger = require('@adobe/aio-lib-core-logging')
 const {
   runDev, serveWebAction, serveNonWebAction, httpStatusResponse,
-  handleAction, handleSequence, statusCodeMessage, isRawWebAction, isWebAction
+  invokeAction, invokeSequence, statusCodeMessage, isRawWebAction, isWebAction
 } = require('../../src/lib/run-dev')
+
+jest.mock('connect-livereload')
+jest.mock('livereload')
+jest.mock('fs-extra')
+jest.mock('node:https', () => {
+  return {
+    createServer: jest.fn(() => {
+      return {
+        listen: jest.fn(),
+        close: jest.fn()
+      }
+    })
+  }
+})
+
+// unmock to test proper returned urls from getActionUrls
+jest.unmock('@adobe/aio-lib-runtime')
 
 // create a Response object
 const createRes = ({ mockStatus, mockSend, mockSet = jest.fn() }) => {
@@ -51,8 +68,8 @@ test('exports', () => {
   expect(serveWebAction).toBeDefined()
   expect(serveNonWebAction).toBeDefined()
   expect(httpStatusResponse).toBeDefined()
-  expect(handleAction).toBeDefined()
-  expect(handleSequence).toBeDefined()
+  expect(invokeAction).toBeDefined()
+  expect(invokeSequence).toBeDefined()
   expect(isRawWebAction).toBeDefined()
   expect(isWebAction).toBeDefined()
 })
@@ -371,7 +388,7 @@ describe('serveWebAction', () => {
   })
 })
 
-describe('handleSequence', () => {
+describe('invokeSequence', () => {
   test('undefined sequence', async () => {
     const mockStatus = jest.fn()
     const mockSend = jest.fn()
@@ -381,7 +398,7 @@ describe('handleSequence', () => {
     const sequence = undefined
     const actionRequestContext = { owPath: '' }
 
-    await handleSequence({ req, res, sequence, actionRequestContext, logger: mockLogger })
+    await invokeSequence({ req, res, sequence, actionRequestContext, logger: mockLogger })
     expect(mockSend).not.toHaveBeenCalled()
   })
 
@@ -406,7 +423,7 @@ describe('handleSequence', () => {
       }
     }
     actionRequestContext = { owPath: '', packageName, actionConfig }
-    await handleSequence({ req, res, sequence, actionRequestContext, logger: mockLogger })
+    await invokeSequence({ req, res, sequence, actionRequestContext, logger: mockLogger })
     expect(mockSend).toHaveBeenCalledTimes(1)
     mockSend.mockClear()
     mockStatus.mockClear()
@@ -423,7 +440,7 @@ describe('handleSequence', () => {
       }
     }
     actionRequestContext = { owPath: '', packageName, actionConfig }
-    await handleSequence({ req, res, sequence, actionRequestContext, logger: mockLogger })
+    await invokeSequence({ req, res, sequence, actionRequestContext, logger: mockLogger })
     expect(mockSend).toHaveBeenCalledTimes(3)
     mockSend.mockClear()
     mockStatus.mockClear()
@@ -438,7 +455,7 @@ describe('handleSequence', () => {
       }
     }
     actionRequestContext = { owPath: '', packageName, actionConfig }
-    await handleSequence({ req, res, sequence, actionRequestContext, logger: mockLogger })
+    await invokeSequence({ req, res, sequence, actionRequestContext, logger: mockLogger })
     expect(mockSend).toHaveBeenCalledTimes(2)
     expect(mockStatus).toHaveBeenCalledWith(200)
     expect(mockStatus).toHaveBeenCalledWith(404)
@@ -464,7 +481,7 @@ describe('handleSequence', () => {
     }
     const actionRequestContext = { owPath: '', packageName, actionConfig }
 
-    await handleSequence({ req, res, sequence, actionRequestContext, logger: mockLogger })
+    await invokeSequence({ req, res, sequence, actionRequestContext, logger: mockLogger })
     expect(mockSend).toHaveBeenCalledTimes(2)
     expect(mockStatus).toHaveBeenCalledWith(200)
     expect(mockStatus).toHaveBeenCalledWith(404)
@@ -493,7 +510,7 @@ describe('handleSequence', () => {
     }
     const actionRequestContext = { owPath: '', packageName, actionConfig }
 
-    await handleSequence({ req, res, sequence, actionRequestContext, logger: mockLogger })
+    await invokeSequence({ req, res, sequence, actionRequestContext, logger: mockLogger })
     expect(mockSend).toHaveBeenCalledTimes(1)
     expect(mockStatus).toHaveBeenCalledWith(401)
   })
@@ -521,7 +538,7 @@ describe('handleSequence', () => {
     }
     const actionRequestContext = { owPath: '', packageName, actionConfig }
 
-    await handleSequence({ req, res, sequence, actionRequestContext, logger: mockLogger })
+    await invokeSequence({ req, res, sequence, actionRequestContext, logger: mockLogger })
     expect(mockSend).toHaveBeenCalledTimes(1)
     expect(mockStatus).toHaveBeenCalledWith(200)
   })
@@ -544,7 +561,7 @@ describe('handleSequence', () => {
     }
     const actionRequestContext = { owPath: '', packageName, actionConfig }
 
-    await handleSequence({ req, res, sequence, actionRequestContext, logger: mockLogger })
+    await invokeSequence({ req, res, sequence, actionRequestContext, logger: mockLogger })
     expect(mockSend).toHaveBeenCalledTimes(1)
     expect(mockStatus).toHaveBeenCalledWith(500)
   })
@@ -567,7 +584,7 @@ describe('handleSequence', () => {
     }
     const actionRequestContext = { owPath: '', packageName, actionConfig }
 
-    await handleSequence({ req, res, sequence, actionRequestContext, logger: mockLogger })
+    await invokeSequence({ req, res, sequence, actionRequestContext, logger: mockLogger })
     expect(mockSend).toHaveBeenCalledTimes(1)
     expect(mockStatus).toHaveBeenCalledWith(401)
   })
@@ -576,15 +593,44 @@ describe('handleSequence', () => {
 describe('runDev', () => {
   test('no front end, has back end', async () => {
     const config = {
+      ow: {
+        namespace: 'mynamespace',
+        auth: 'myauthkey',
+        defaultApihost: 'https://localhost',
+        apihost: 'https://localhost'
+      },
       app: {
+        hostname: 'https://localhost',
+        defaultHostname: 'https://adobeio-static.net',
         hasFrontend: false,
         hasBackend: true
+      },
+      manifest: {
+        full: {
+          packages: {
+            mypackage: {
+              actions: {
+                myaction: { function: fixturePath('actions/simpleAction.js') }
+              }
+            }
+          }
+        }
       }
     }
     const runOptions = {
+      parcel: {
+        https: {
+          cert: 'my-cert',
+          key: 'my-key'
+        }
+      }
     }
     const hookRunner = () => {}
 
-    await runDev(runOptions, config, hookRunner)
+    const { frontendUrl, actionUrls, serverCleanup } = await runDev(runOptions, config, hookRunner)
+    await serverCleanup()
+
+    expect(frontendUrl).not.toBeDefined()
+    expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
   })
 })

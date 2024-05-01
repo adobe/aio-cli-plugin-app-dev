@@ -117,7 +117,7 @@ class Dev extends BaseCommand {
     const inprocHook = this.config.runHook.bind(this.config)
     const cleanup = new Cleanup()
     const { frontendUrl, actionUrls, serverCleanup } = await runDev(runOptions, config, inprocHook)
-    cleanup.add(() => serverCleanup(), 'cleaning up serve...')
+    cleanup.add(() => serverCleanup(), 'cleaning up runDev...')
     cleanup.wait()
 
     // fire post hook

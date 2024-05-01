@@ -247,7 +247,7 @@ async function serveNonWebAction (req, res) {
 }
 
 /**
- * Handle a sequence.
+ * Invoke a sequence.
  *
  * @param {object} params the parameters
  * @param {object} params.req the http request object
@@ -257,7 +257,7 @@ async function serveNonWebAction (req, res) {
  * @param {object} params.logger the logger object
  * @returns {void}
  */
-async function handleSequence ({ req, res, sequence, actionRequestContext, logger }) {
+async function invokeSequence ({ req, res, sequence, actionRequestContext, logger }) {
   const actions = sequence?.actions?.split(',') ?? []
   const params = {
     __ow_body: req.body,
@@ -278,7 +278,7 @@ async function handleSequence ({ req, res, sequence, actionRequestContext, logge
     const action = actionRequestContext.actionConfig?.[actionRequestContext.packageName]?.actions[actionName]
     const context = { action, actionName, owPath: actionRequestContext.owPath }
     if (action) {
-      await handleAction({ req, res, actionRequestContext: context, logger })
+      await invokeAction({ req, res, actionRequestContext: context, logger })
     } else {
       return httpStatusResponse({ statusCode: 404, statusMessage: `${actionName} in sequence not found`, res, logger })
     }
@@ -286,7 +286,7 @@ async function handleSequence ({ req, res, sequence, actionRequestContext, logge
 }
 
 /**
- * Handle an action.
+ * Invoke an action.
  *
  * @param {object} params the parameters
  * @param {Request} params.req the http request object
@@ -295,7 +295,7 @@ async function handleSequence ({ req, res, sequence, actionRequestContext, logge
  * @param {object} params.logger the logger object
  * @returns {Response} the http response object
  */
-async function handleAction ({ req, res, actionRequestContext, logger }) {
+async function invokeAction ({ req, res, actionRequestContext, logger }) {
   // check if action is protected
   if (actionRequestContext.action?.annotations?.['require-adobe-auth']) {
     // check if user is authenticated
@@ -411,11 +411,11 @@ async function serveWebAction (req, res, actionConfig) {
       actionLogger.warn('raw web action handling is not implemented yet')
     }
 
-    await handleAction({ req, res, actionRequestContext, logger: actionLogger })
+    await invokeAction({ req, res, actionRequestContext, logger: actionLogger })
   } else { // could be a sequence
     const sequence = actionConfig[packageName]?.sequences?.[actionName]
     if (sequence) {
-      await handleSequence({ req, res, sequence, actionConfig, actionRequestContext, logger: actionLogger })
+      await invokeSequence({ req, res, sequence, actionConfig, actionRequestContext, logger: actionLogger })
     } else {
       return httpStatusResponse({ statusCode: 404, res, logger: actionLogger })
     }
@@ -427,8 +427,8 @@ module.exports = {
   serveWebAction,
   serveNonWebAction,
   httpStatusResponse,
-  handleAction,
-  handleSequence,
+  invokeAction,
+  invokeSequence,
   statusCodeMessage,
   isRawWebAction,
   isWebAction
