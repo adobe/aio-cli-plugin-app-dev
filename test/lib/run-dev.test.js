@@ -10,7 +10,10 @@ OF ANY KIND, either express or implied. See the License for the specific languag
 governing permissions and limitations under the License.
 */
 
+const mockExpress = require('express')
 const mockLogger = require('@adobe/aio-lib-core-logging')
+const mockLibWeb = require('@adobe/aio-lib-web')
+const mockGetPort = require('get-port')
 const {
   runDev, serveWebAction, serveNonWebAction, httpStatusResponse,
   invokeAction, invokeSequence, statusCodeMessage, isRawWebAction, isWebAction
@@ -19,7 +22,9 @@ const {
 jest.useFakeTimers()
 
 jest.mock('connect-livereload')
+jest.mock('node:path')
 jest.mock('fs-extra')
+jest.mock('get-port')
 
 jest.mock('livereload', () => {
   return {
@@ -82,6 +87,8 @@ const createReq = ({ url, body, headers = [], query, method = 'GET', is = jest.f
 
 beforeEach(() => {
   mockLogger.mockReset()
+  mockGetPort.mockReset()
+  mockExpress.mockReset()
 })
 
 test('exports', () => {
@@ -360,9 +367,10 @@ describe('serveWebAction', () => {
   test('action not found, is sequence', async () => {
     const mockStatus = jest.fn()
     const mockSend = jest.fn()
+    const is = jest.fn((mimeType) => mimeType === 'application/json')
 
     const res = createRes({ mockStatus, mockSend })
-    const req = createReq({ url: 'foo/mysequence' })
+    const req = createReq({ url: 'foo/mysequence', is })
     const packageName = 'foo'
 
     const actionConfig = {
@@ -652,7 +660,37 @@ const createRunOptions = ({ cert, key }) => {
   }
 }
 
+const createBundlerEvent = ({ type = 'buildSuccess', diagnostics = 'some diagnostics', changedAssets = [], bundles = [] } = {}) => {
+  return {
+    type,
+    diagnostics,
+    changedAssets: new Map(changedAssets), // param is a key value array [[key, value][key, value]]
+    bundleGraph: {
+      getBundles: jest.fn(() => bundles)
+    }
+  }
+}
+
 describe('runDev', () => {
+  test('no front end, no back end', async () => {
+    const config = createConfig({
+      hasFrontend: false,
+      hasBackend: false,
+      packageName: 'mypackage',
+      actions: {
+        myaction: { function: fixturePath('actions/simpleAction.js') }
+      }
+    })
+    const runOptions = createRunOptions({ cert: 'my-cert', key: 'my-key' })
+    const hookRunner = () => {}
+    const { frontendUrl, actionUrls, serverCleanup } = await runDev(runOptions, config, hookRunner)
+
+    await serverCleanup()
+
+    expect(frontendUrl).not.toBeDefined()
+    expect(Object.keys(actionUrls).length).toEqual(0)
+  })
+
   test('no front end, has back end', async () => {
     const config = createConfig({
       hasFrontend: false,
@@ -683,11 +721,223 @@ describe('runDev', () => {
     })
     const runOptions = createRunOptions({ cert: 'my-cert', key: 'my-key' })
     const hookRunner = () => {}
+    mockGetPort.mockImplementation(({ port }) => port)
+    const mockStatus = jest.fn()
+    const mockSend = jest.fn()
+    const res = createRes({ mockStatus, mockSend })
+    const req = createReq({ url: 'foo/bar' })
+
+    const bundleEvent = createBundlerEvent()
+    const bundlerWatch = (fn) => fn(null, bundleEvent)
+    mockLibWeb.bundle.mockResolvedValue({
+      run: jest.fn(),
+      watch: bundlerWatch
+    })
+
+    mockExpress.all.mockImplementation((_, fn) => {
+      fn(req, res)
+    })
+
+    // 1. run options https
+    {
+      const { frontendUrl, actionUrls, serverCleanup } = await runDev(runOptions, config, hookRunner)
+      await serverCleanup()
+
+      expect(frontendUrl).toBeDefined()
+      expect(new URL(frontendUrl).protocol).toEqual('https:')
+      expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
+    }
+
+    // 1. run options *not* https
+    {
+      const { frontendUrl, actionUrls, serverCleanup } = await runDev({}, config, hookRunner)
+      await serverCleanup()
+
+      expect(frontendUrl).toBeDefined()
+      expect(new URL(frontendUrl).protocol).toEqual('http:')
+      expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
+    }
+  })
+
+  test('has front end, has back end, default ports taken', async () => {
+    const config = createConfig({
+      hasFrontend: true,
+      hasBackend: true,
+      packageName: 'mypackage',
+      actions: {
+        myaction: { function: fixturePath('actions/simpleAction.js') }
+      }
+    })
+    const runOptions = createRunOptions({ cert: 'my-cert', key: 'my-key' })
+    const hookRunner = () => {}
+    mockGetPort.mockImplementation(({ port }) => {
+      return port + 1
+    })
 
     const { frontendUrl, actionUrls, serverCleanup } = await runDev(runOptions, config, hookRunner)
     await serverCleanup()
 
     expect(frontendUrl).toBeDefined()
     expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
+  })
+
+  test('has front end, has back end, bundler watch success', async () => {
+    const config = createConfig({
+      hasFrontend: true,
+      hasBackend: true,
+      packageName: 'mypackage',
+      actions: {
+        myaction: { function: fixturePath('actions/simpleAction.js') }
+      }
+    })
+    const runOptions = createRunOptions({ cert: 'my-cert', key: 'my-key' })
+    const hookRunner = () => {}
+    mockGetPort.mockImplementation(({ port }) => port)
+
+    // 1. changed assets within limit
+    {
+      const changedAssets = [
+        ['fileA', 'fileA/path/here'],
+        ['fileB', 'fileB/path/here']
+      ]
+      const bundleEvent = createBundlerEvent({ changedAssets })
+      const bundlerWatch = (fn) => {
+        fn(null, bundleEvent)
+      }
+      mockLibWeb.bundle.mockResolvedValue({
+        run: jest.fn(),
+        watch: bundlerWatch
+      })
+
+      const { frontendUrl, actionUrls, serverCleanup } = await runDev(runOptions, config, hookRunner)
+      await serverCleanup()
+
+      expect(frontendUrl).toBeDefined()
+      expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
+    }
+
+    // 1. changed assets above limit (runOptions.verbose is false)
+    {
+      const changedAssets = [
+        ['fileA', 'fileA/path/here'],
+        ['fileB', 'fileB/path/here'],
+        ['fileC', 'fileC/path/here'],
+        ['fileD', 'fileD/path/here'],
+        ['fileE', 'fileE/path/here'],
+        ['fileF', 'fileF/path/here']
+      ]
+      const bundleEvent = createBundlerEvent({ changedAssets })
+      const bundlerWatch = (fn) => {
+        fn(null, bundleEvent)
+      }
+      mockLibWeb.bundle.mockResolvedValue({
+        run: jest.fn(),
+        watch: bundlerWatch
+      })
+
+      const { frontendUrl, actionUrls, serverCleanup } = await runDev(runOptions, config, hookRunner)
+      await serverCleanup()
+
+      expect(frontendUrl).toBeDefined()
+      expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
+      expect(mockLogger.info).not.toHaveBeenCalledWith('\t-->', changedAssets.at(-1)[1]) // value of last item
+    }
+
+    // 1. changed assets above limit (runOptions.verbose is true)
+    {
+      const changedAssets = [
+        ['fileA', 'fileA/path/here'],
+        ['fileB', 'fileB/path/here'],
+        ['fileC', 'fileC/path/here'],
+        ['fileD', 'fileD/path/here'],
+        ['fileE', 'fileE/path/here'],
+        ['fileF', 'fileF/path/here']
+      ]
+      const bundleEvent = createBundlerEvent({ changedAssets })
+      const bundlerWatch = (fn) => {
+        fn(null, bundleEvent)
+      }
+      mockLibWeb.bundle.mockResolvedValue({
+        run: jest.fn(),
+        watch: bundlerWatch
+      })
+
+      runOptions.verbose = true
+      const { frontendUrl, actionUrls, serverCleanup } = await runDev(runOptions, config, hookRunner)
+      await serverCleanup()
+
+      expect(frontendUrl).toBeDefined()
+      expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
+      expect(mockLogger.info).toHaveBeenCalledWith('\t-->', changedAssets.at(-1)[1]) // value of last item
+    }
+  })
+
+  test('has front end, has back end, bundler watch error', async () => {
+    const config = createConfig({
+      hasFrontend: true,
+      hasBackend: true,
+      packageName: 'mypackage',
+      actions: {
+        myaction: { function: fixturePath('actions/simpleAction.js') }
+      }
+    })
+    const runOptions = createRunOptions({ cert: 'my-cert', key: 'my-key' })
+    const hookRunner = () => {}
+
+    // 1. error in bundle.watch
+    {
+      const bundleEvent = createBundlerEvent()
+      const bundleErr = { diagnostics: 'something went wrong' }
+      mockLibWeb.bundle.mockResolvedValue({
+        run: jest.fn(),
+        watch: (fn) => {
+          fn(bundleErr, bundleEvent)
+        }
+      })
+
+      const { frontendUrl, actionUrls, serverCleanup } = await runDev(runOptions, config, hookRunner)
+      await serverCleanup()
+
+      expect(frontendUrl).toBeDefined()
+      expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
+      expect(mockLogger.error).toHaveBeenCalledWith(bundleErr.diagnostics)
+    }
+
+    // 2. error in bundle build
+    {
+      const bundlerEventParams = { type: 'buildFailure', diagnostics: 'something went wrong' }
+      const bundleEvent = createBundlerEvent(bundlerEventParams)
+      mockLibWeb.bundle.mockResolvedValue({
+        run: jest.fn(),
+        watch: (fn) => {
+          fn(null, bundleEvent)
+        }
+      })
+
+      const { frontendUrl, actionUrls, serverCleanup } = await runDev(runOptions, config, hookRunner)
+      await serverCleanup()
+
+      expect(frontendUrl).toBeDefined()
+      expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
+      expect(mockLogger.error).toHaveBeenCalledWith(bundlerEventParams.diagnostics)
+    }
+
+    // 2. unknown buildEvent type
+    {
+      const bundlerEventParams = { type: 'unknown_event_type', diagnostics: 'something went wrong 2' }
+      const bundleEvent = createBundlerEvent(bundlerEventParams)
+      mockLibWeb.bundle.mockResolvedValue({
+        run: jest.fn(),
+        watch: (fn) => {
+          fn(null, bundleEvent)
+        }
+      })
+
+      const { frontendUrl, actionUrls, serverCleanup } = await runDev(runOptions, config, hookRunner)
+      await serverCleanup()
+
+      expect(frontendUrl).toBeDefined()
+      expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
+    }
   })
 })

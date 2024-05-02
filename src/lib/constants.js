@@ -11,6 +11,7 @@ governing permissions and limitations under the License.
 
 // overridable in the env
 const {
+  CHANGED_ASSETS_PRINT_LIMIT = 5,
   SERVER_DEFAULT_PORT = 9080,
   BUNDLER_DEFAULT_PORT = 9090,
   DEV_KEYS_DIR = 'dist/dev-keys',
@@ -26,6 +27,7 @@ const BUNDLE_OPTIONS = {
 }
 
 module.exports = {
+  CHANGED_ASSETS_PRINT_LIMIT,
   SERVER_DEFAULT_PORT: parseInt(SERVER_DEFAULT_PORT, 10), // parse any env override
   BUNDLER_DEFAULT_PORT: parseInt(BUNDLER_DEFAULT_PORT, 10), // parse any env override
   DEV_API_PREFIX,

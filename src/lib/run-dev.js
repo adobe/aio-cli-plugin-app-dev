@@ -24,7 +24,7 @@ const coreLogger = require('@adobe/aio-lib-core-logging')
 const { getReasonPhrase } = require('http-status-codes')
 
 const utils = require('./app-helper')
-const { SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX, BUNDLE_OPTIONS } = require('./constants')
+const { SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX, BUNDLE_OPTIONS, CHANGED_ASSETS_PRINT_LIMIT } = require('./constants')
 
 /* global Request, Response */
 
@@ -51,7 +51,7 @@ const { SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_P
  * @param {object} _inprocHookRunner the in-process hook runner for the app
  * @returns {RunDevReturnObject} the object returned
  */
-async function runDev (runOptions = {}, config, _inprocHookRunner) {
+async function runDev (runOptions, config, _inprocHookRunner) {
   const bundleOptions = cloneDeep(BUNDLE_OPTIONS)
   const devConfig = cloneDeep(config)
 
@@ -61,7 +61,7 @@ async function runDev (runOptions = {}, config, _inprocHookRunner) {
   const actionConfig = devConfig.manifest.full.packages
   const hasFrontend = devConfig.app.hasFrontend
   const hasBackend = devConfig.app.hasBackend
-  const httpsSettings = runOptions.parcel.https
+  const httpsSettings = runOptions?.parcel?.https
 
   serveLogger.debug('hasBackend', hasBackend)
   serveLogger.debug('hasFrontend', hasFrontend)
@@ -88,11 +88,14 @@ async function runDev (runOptions = {}, config, _inprocHookRunner) {
     }, {})
   }
 
-  const cert = fs.readFileSync(httpsSettings.cert, 'utf-8')
-  const key = fs.readFileSync(httpsSettings.key, 'utf-8')
-  const serverOptions = {
-    key,
-    cert
+  let serverOptions
+  if (httpsSettings) {
+    const cert = fs.readFileSync(httpsSettings.cert, 'utf-8')
+    const key = fs.readFileSync(httpsSettings.key, 'utf-8')
+    serverOptions = {
+      key,
+      cert
+    }
   }
 
   let subscription
@@ -135,7 +138,7 @@ async function runDev (runOptions = {}, config, _inprocHookRunner) {
         }
 
         serveLogger.info(`${event.changedAssets.size} static asset(s) changed`)
-        const limit = runOptions.verbose ? Infinity : 5
+        const limit = runOptions.verbose ? Infinity : CHANGED_ASSETS_PRINT_LIMIT
         if (event.changedAssets.size <= limit) {
           event.changedAssets.forEach((value, key, map) => {
             serveLogger.info('\t-->', value)
@@ -149,6 +152,7 @@ async function runDev (runOptions = {}, config, _inprocHookRunner) {
         }
       })
     } catch (err) {
+      console.error(err)
       serveLogger.error(err.diagnostics)
     }
   }
@@ -329,14 +333,14 @@ async function invokeAction ({ req, res, actionRequestContext, logger }) {
       process.env.__OW_ACTION_NAME = actionRequestContext.actionName
       const response = await actionFunction(params)
       delete process.env.__OW_ACTION_NAME
-      const headers = response?.headers || {}
+      const headers = response?.headers
       const statusCode = (response?.error?.statusCode ?? response?.statusCode) || 200
 
       logger.info(`${statusCode} ${statusCodeMessage(statusCode)}`)
 
       return res
         .set(headers || {})
-        .status(statusCode || 200)
+        .status(statusCode)
         .send(response?.error?.body ?? response?.body)
     } catch (e) {
       const statusCode = 500
