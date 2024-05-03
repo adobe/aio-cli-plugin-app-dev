@@ -117,7 +117,7 @@ describe('run', () => {
     mockFindCommandRun.mockReset()
 
     command = new TheCommand()
-    command.error = jest.fn()
+    command.error = jest.fn((message) => { throw new Error(message) })
     command.log = jest.fn()
     command.config = {
       runHook: jest.fn(),
@@ -131,17 +131,7 @@ describe('run', () => {
     command.getLaunchUrlPrefix = jest.fn(() => 'https://my.launch.prefix/?localDevUrl=')
   })
 
-  // test('app:run with no ui and no manifest should fail: default config', async () => {
-  //   command.argv = []
-  //   command.appConfig.app.hasFrontend = false
-  //   command.appConfig.app.hasBackend = false
-  //   command.getAppExtConfigs.mockResolvedValueOnce(createAppConfig(command.appConfig))
-
-  //   await command.run()
-  //   expect(command.error).toHaveBeenCalledWith(Error('nothing to run.. there is no frontend and no manifest.yml, are you in a valid app?'))
-  // })
-
-  test('run, no flags', async () => {
+  test('run, no flags, one extension', async () => {
     command.argv = []
     const appConfig = {
       hooks: {
@@ -160,7 +150,102 @@ describe('run', () => {
     expect(command.error).not.toHaveBeenCalled()
   })
 
-  test('run with --extension flag', async () => {
+  test('run, no flags, no frontend nor backend', async () => {
+    command.argv = []
+    const appConfig = {
+      hooks: {
+      },
+      app: {
+        hasFrontend: false,
+        hasBackend: false
+      }
+    }
+
+    command.getAppExtConfigs.mockResolvedValueOnce({ myextension: appConfig })
+    mockRunDev.mockResolvedValue({ frontEndUrl: 'https://localhost:9080', actionUrls: {} })
+
+    await expect(command.run()).rejects.toThrow('nothing to run... there is no frontend and no manifest.yml, are you in a valid app?')
+  })
+
+  test('run, no flags, runInProcess exception', async () => {
+    const errMessage = 'something went wrong with running the process'
+    command.argv = []
+    const appConfig = {
+      hooks: {
+      },
+      app: {
+        hasFrontend: true,
+        hasBackend: true
+      }
+    }
+
+    command.getAppExtConfigs.mockResolvedValueOnce({ myextension: appConfig })
+    mockRunDev.mockResolvedValue({ frontEndUrl: 'https://localhost:9080', actionUrls: {} })
+    mockHelpers.runInProcess.mockRejectedValue(errMessage)
+
+    // an error in runInProcess should not stop the rest of the command
+    await command.run()
+    expect(command.log).toHaveBeenCalledWith('press CTRL+C to terminate the dev environment') // success
+    expect(command.error).not.toHaveBeenCalled()
+    expect(command.log).toHaveBeenCalledWith(errMessage)
+  })
+
+  test('getOrGenerateCertificates exception', async () => {
+    const errMessage = 'this is an error'
+    command.argv = []
+    const appConfig = {
+      hooks: {
+      },
+      app: {
+        hasFrontend: true,
+        hasBackend: true
+      }
+    }
+
+    command.getAppExtConfigs.mockResolvedValueOnce({ myextension: appConfig })
+    command.getOrGenerateCertificates = jest.fn()
+    command.getOrGenerateCertificates.mockRejectedValue(new Error(errMessage))
+
+    await expect(command.run()).rejects.toThrow(errMessage)
+  })
+
+  test('runOneExtensionPoint exception', async () => {
+    const errMessage = 'this is an error'
+    command.argv = []
+    const appConfig = {
+      hooks: {
+      },
+      app: {
+        hasFrontend: true,
+        hasBackend: true
+      }
+    }
+
+    command.getAppExtConfigs.mockResolvedValueOnce({ myextension: appConfig })
+    command.runOneExtensionPoint = jest.fn()
+    command.runOneExtensionPoint.mockRejectedValue(new Error(errMessage))
+
+    await expect(command.run()).rejects.toThrow(errMessage)
+  })
+
+  test('run, no flags, multiple extensions', async () => {
+    command.argv = []
+    const appConfig = {
+      hooks: {
+      },
+      app: {
+        hasFrontend: true,
+        hasBackend: true
+      }
+    }
+
+    command.getAppExtConfigs.mockResolvedValueOnce({ myextension: appConfig, anotherextension: appConfig })
+    mockRunDev.mockResolvedValue({ frontEndUrl: 'https://localhost:9080', actionUrls: {} })
+
+    await expect(command.run()).rejects.toThrow('Your app implements multiple extensions. You can only run one at the time, please select which extension to run with the \'-e\' flag.')
+  })
+
+  test('run with --extension flag (extension found)', async () => {
     const myExtension = 'myextension'
     command.argv = ['--extension', myExtension]
     const appConfig = {
@@ -180,8 +265,26 @@ describe('run', () => {
     expect(command.error).not.toHaveBeenCalled()
   })
 
+  test('run with --extension flag (extension not found)', async () => {
+    const theExtension = 'unknown_extension'
+    command.argv = ['--extension', theExtension]
+    const appConfig = {
+      hooks: {
+      },
+      app: {
+        hasFrontend: true,
+        hasBackend: true
+      }
+    }
+
+    command.getAppExtConfigs.mockResolvedValueOnce({ myextension: appConfig })
+    mockRunDev.mockResolvedValue({ frontEndUrl: 'https://localhost:9080', actionUrls: {} })
+
+    await expect(command.run()).rejects.toThrow(`extension '${theExtension}' was not found.`)
+  })
+
   test('run with --open flag', async () => {
-    command.argv = []
+    command.argv = ['--open']
     const appConfig = {
       hooks: {
       },
@@ -198,4 +301,7 @@ describe('run', () => {
     expect(command.log).toHaveBeenCalledWith('press CTRL+C to terminate the dev environment') // success
     expect(command.error).not.toHaveBeenCalled()
   })
+})
+
+describe('getOrGenerateCertificates', () => {
 })

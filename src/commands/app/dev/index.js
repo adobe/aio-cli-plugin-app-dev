@@ -38,11 +38,17 @@ class Dev extends BaseCommand {
 
     const runConfigs = await this.getAppExtConfigs(flags)
     const entries = Object.entries(runConfigs)
-    if (entries.length > 1 && !flags.extension) {
+    let entry = entries[0]
+
+    if (flags.extension) {
+      entry = entries.find(([name]) => name === flags.extension)
+      if (!entry) {
+        this.error(`extension '${flags.extension}' was not found.`)
+      }
+    } else if (entries.length > 1) {
       this.error('Your app implements multiple extensions. You can only run one at the time, please select which extension to run with the \'-e\' flag.')
     }
 
-    const entry = flags.extension ? entries.find(([name]) => name === flags.extension) : entries[0]
     const [name, config] = entry
     try {
       // now we are good, either there is only 1 extension point or -e flag for one was provided
@@ -86,7 +92,7 @@ class Dev extends BaseCommand {
     const hasFrontend = config.app.hasFrontend
 
     if (!hasBackend && !hasFrontend) {
-      this.error(new Error('nothing to run.. there is no frontend and no manifest.yml, are you in a valid app?'))
+      this.error('nothing to run... there is no frontend and no manifest.yml, are you in a valid app?')
     }
 
     const runOptions = {
