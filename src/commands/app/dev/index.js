@@ -12,7 +12,7 @@ governing permissions and limitations under the License.
 
 const ora = require('ora')
 const fs = require('fs-extra')
-const https = require('https')
+const https = require('node:https')
 const getPort = require('get-port')
 const open = require('open')
 const chalk = require('chalk')
@@ -38,11 +38,12 @@ class Dev extends BaseCommand {
 
     const runConfigs = await this.getAppExtConfigs(flags)
     const entries = Object.entries(runConfigs)
-    if (entries.length > 1) {
+    if (entries.length > 1 && !flags.extension) {
       this.error('Your app implements multiple extensions. You can only run one at the time, please select which extension to run with the \'-e\' flag.')
     }
 
-    const [name, config] = entries[0]
+    const entry = flags.extension ? entries.find(([name]) => name === flags.extension) : entries[0]
+    const [name, config] = entry
     try {
       // now we are good, either there is only 1 extension point or -e flag for one was provided
       await this.runOneExtensionPoint(name, config, flags)
@@ -72,9 +73,9 @@ class Dev extends BaseCommand {
     const webActions = Object.values(actionUrls).filter(url => url.includes(DEV_API_WEB_PREFIX))
     const nonWebActions = Object.values(actionUrls).filter(url => !url.includes(DEV_API_WEB_PREFIX))
 
-    blueBoldLog('web actions:')
+    this.log('web actions:')
     webActions.forEach(printUrl)
-    blueBoldLog('non-web actions:')
+    this.log('non-web actions:')
     nonWebActions.forEach(printUrl)
   }
 
@@ -111,6 +112,7 @@ class Dev extends BaseCommand {
     try {
       runOptions.parcel.https = await this.getOrGenerateCertificates()
     } catch (error) {
+      console.error(error)
       this.error(error)
     }
 
@@ -171,8 +173,8 @@ class Dev extends BaseCommand {
     }
 
     // 2. store them globally in config
-    const privateKey = (await fs.readFile(PRIVATE_KEY_PATH)).toString()
-    const publicCert = (await fs.readFile(PUB_CERT_PATH)).toString()
+    const privateKey = (await fs.readFile(PRIVATE_KEY_PATH, { encoding: 'utf8' }))
+    const publicCert = (await fs.readFile(PUB_CERT_PATH), { encoding: 'utf8' })
     coreConfig.set(`${DEV_KEYS_CONFIG_KEY}.privateKey`, privateKey)
     coreConfig.set(`${DEV_KEYS_CONFIG_KEY}.publicCert`, publicCert)
 
@@ -226,9 +228,7 @@ Dev.flags = {
     description: 'Run only a specific extension, this flag can only be specified once',
     char: 'e',
     // we do not support multiple yet
-    multiple: false,
-    // not multiple but treat it as array for logic reuse
-    parse: str => [str]
+    multiple: false
   })
 }
 

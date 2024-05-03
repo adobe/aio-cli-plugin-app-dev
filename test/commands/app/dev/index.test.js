@@ -18,25 +18,34 @@ const cloneDeep = require('lodash.clonedeep')
 const open = require('open')
 const { ux } = require('@oclif/core')
 
-jest.mock('@oclif/core', () => {
-  return {
-    ...jest.requireActual('@oclif/core'),
-    ux: {
-      action: {
-        start: jest.fn(),
-        stop: jest.fn()
-      },
-      wait: jest.fn()
-    }
-  }
-})
+const { runDev: mockRunDev } = require('../../../../src/lib/run-dev')
+const mockHelpers = require('../../../../src/lib/app-helper')
+const mockFS = require('fs-extra')
+const mockConfig = require('@adobe/aio-lib-core-config')
 
 jest.mock('open', () => jest.fn())
 jest.mock('../../../../src/lib/run-dev')
-const { runDev: mockRunDev } = require('../../../../src/lib/run-dev')
-
 jest.mock('../../../../src/lib/app-helper')
-const helpers = require('../../../../src/lib/app-helper')
+jest.mock('fs-extra')
+
+jest.mock('node:https', () => {
+  return {
+    createServer: jest.fn((_, cb) => {
+      const req = {}
+      const res = {
+        writeHead: jest.fn(),
+        end: jest.fn()
+      }
+      cb && cb(req, res) // call right away
+      return {
+        listen: jest.fn((_, fn) => {
+          fn && fn() // call right away
+        }),
+        close: jest.fn()
+      }
+    })
+  }
+})
 
 const mockConfigData = {
   app: {
@@ -45,45 +54,10 @@ const mockConfigData = {
   }
 }
 
-// should be same as in run.js
-const DEV_KEYS_DIR = 'dist/dev-keys/'
-const PRIVATE_KEY_PATH = DEV_KEYS_DIR + 'private.key'
-const PUB_CERT_PATH = DEV_KEYS_DIR + 'cert-pub.crt'
-const CONFIG_KEY = 'aio-dev.dev-keys'
-
-// mocks
-const mockFS = require('fs-extra')
-jest.mock('fs-extra')
-
-jest.mock('@adobe/aio-lib-core-config')
-const mockConfig = require('@adobe/aio-lib-core-config')
-
-jest.mock('https')
-const https = require('https')
-
-jest.mock('node:os')
-const os = require('node:os')
-
-jest.mock('get-port')
-const getPort = require('get-port')
-
-let command
-
-const mockFindCommandRun = jest.fn()
-const mockFindCommandLoad = jest.fn().mockReturnValue({
-  run: mockFindCommandRun
-})
-
-const mockHttpsServerInstance = {
-  listen: jest.fn(),
-  close: jest.fn(),
-  args: null
-}
-
 beforeEach(() => {
   jest.clearAllMocks()
   mockRunDev.mockReset()
-  helpers.runInProcess.mockReset()
+  mockHelpers.runInProcess.mockReset()
 
   mockConfig.get = jest.fn().mockReturnValue({ globalConfig: 'seems-legit' })
 
@@ -98,37 +72,7 @@ beforeEach(() => {
     start: jest.fn()
   }
   open.mockReset()
-  ux.wait = jest.fn() // .mockImplementation((ms = 1000) => { return new Promise(resolve => setTimeout(resolve, ms)) })
-
-  os.cpus.mockImplementation(() => [{ model: 'Intel Pentium MMX' }])
-
-  mockFindCommandLoad.mockClear()
-  mockFindCommandRun.mockReset()
-
-  command = new TheCommand()
-  command.error = jest.fn()
-  command.log = jest.fn()
-  command.config = {
-    runHook: jest.fn(),
-    findCommand: jest.fn().mockReturnValue({
-      load: mockFindCommandLoad
-    }),
-    dataDir: '/data/dir'
-  }
-  command.appConfig = cloneDeep(mockConfigData)
-  command.getAppExtConfigs = jest.fn()
-
-  https.createServer.mockImplementation((opts, func) => {
-    mockHttpsServerInstance.args = { opts, func }
-    return mockHttpsServerInstance
-  })
-  mockHttpsServerInstance.listen.mockReset()
-  mockHttpsServerInstance.close.mockReset()
-  https.createServer.mockClear()
-
-  getPort.mockReset()
-
-  delete process.env.PORT
+  ux.wait = jest.fn()
 })
 
 afterEach(() => {
@@ -162,6 +106,31 @@ describe('run command definition', () => {
 })
 
 describe('run', () => {
+  let command
+  const mockFindCommandRun = jest.fn()
+  const mockFindCommandLoad = jest.fn().mockReturnValue({
+    run: mockFindCommandRun
+  })
+
+  beforeEach(() => {
+    mockFindCommandLoad.mockClear()
+    mockFindCommandRun.mockReset()
+
+    command = new TheCommand()
+    command.error = jest.fn()
+    command.log = jest.fn()
+    command.config = {
+      runHook: jest.fn(),
+      findCommand: jest.fn().mockReturnValue({
+        load: mockFindCommandLoad
+      }),
+      dataDir: '/data/dir'
+    }
+    command.appConfig = cloneDeep(mockConfigData)
+    command.getAppExtConfigs = jest.fn()
+    command.getLaunchUrlPrefix = jest.fn(() => 'https://my.launch.prefix/?localDevUrl=')
+  })
+
   // test('app:run with no ui and no manifest should fail: default config', async () => {
   //   command.argv = []
   //   command.appConfig.app.hasFrontend = false
@@ -171,4 +140,62 @@ describe('run', () => {
   //   await command.run()
   //   expect(command.error).toHaveBeenCalledWith(Error('nothing to run.. there is no frontend and no manifest.yml, are you in a valid app?'))
   // })
+
+  test('run, no flags', async () => {
+    command.argv = []
+    const appConfig = {
+      hooks: {
+      },
+      app: {
+        hasFrontend: true,
+        hasBackend: true
+      }
+    }
+
+    command.getAppExtConfigs.mockResolvedValueOnce({ myextension: appConfig })
+    mockRunDev.mockResolvedValue({ frontEndUrl: 'https://localhost:9080', actionUrls: {} })
+
+    await command.run()
+    expect(command.log).toHaveBeenCalledWith('press CTRL+C to terminate the dev environment') // success
+    expect(command.error).not.toHaveBeenCalled()
+  })
+
+  test('run with --extension flag', async () => {
+    const myExtension = 'myextension'
+    command.argv = ['--extension', myExtension]
+    const appConfig = {
+      hooks: {
+      },
+      app: {
+        hasFrontend: true,
+        hasBackend: true
+      }
+    }
+
+    command.getAppExtConfigs.mockResolvedValueOnce({ someOtherExtension: {}, [myExtension]: appConfig })
+    mockRunDev.mockResolvedValue({ frontEndUrl: 'https://localhost:9080', actionUrls: {} })
+
+    await command.run()
+    expect(command.log).toHaveBeenCalledWith('press CTRL+C to terminate the dev environment') // success
+    expect(command.error).not.toHaveBeenCalled()
+  })
+
+  test('run with --open flag', async () => {
+    command.argv = []
+    const appConfig = {
+      hooks: {
+      },
+      app: {
+        hasFrontend: true,
+        hasBackend: true
+      }
+    }
+
+    command.getAppExtConfigs.mockResolvedValueOnce({ myextension: appConfig })
+    mockRunDev.mockResolvedValue({ frontEndUrl: 'https://localhost:9080', actionUrls: {} })
+
+    await command.run()
+    expect(command.log).toHaveBeenCalledWith('press CTRL+C to terminate the dev environment') // success
+    expect(command.error).not.toHaveBeenCalled()
+  })
 })
