@@ -76,105 +76,62 @@ test('getLaunchUrlPrefix() uses stage launch prefix', async () => {
   expect(cmd.getLaunchUrlPrefix()).toBe('https://experience-stage.adobe.com/?devMode=true#/custom-apps/?localDevUrl=')
 })
 
-// describe('getFullConfig', () => {
-//   test('keeps cache', async () => {
-//     const cmd = new TheCommand()
-//     mockConfigLoader.load.mockResolvedValue({ a: 'hello' })
-//     const config = await cmd.getFullConfig()
-//     const config2 = await cmd.getFullConfig()
-//     expect(config).toEqual({ a: 'hello' })
-//     expect(config).toEqual(config2)
-//     expect(mockConfigLoader.load).toHaveBeenCalledTimes(1)
-//   })
-//   test('with options', async () => {
-//     const cmd = new TheCommand()
-//     mockConfigLoader.load.mockResolvedValue({ a: 'hello' })
-//     const config = await cmd.getFullConfig({ someOptions: {} })
-//     expect(config).toEqual({ a: 'hello' })
-//     expect(mockConfigLoader.load).toHaveBeenCalledWith({ someOptions: {}, validateAppConfig: false })
-//   })
-//   test('with validateAppConfig=true', async () => {
-//     const cmd = new TheCommand()
-//     mockConfigLoader.load.mockResolvedValue({ a: 'hello' })
-//     const config = await cmd.getFullConfig({ someOptions: {}, validateAppConfig: true })
-//     expect(config).toEqual({ a: 'hello' })
-//     expect(mockConfigLoader.load).toHaveBeenCalledWith({ someOptions: {}, validateAppConfig: true })
-//   })
-// })
+describe('getFullConfig', () => {
+  test('keeps cache', async () => {
+    const cmd = new TheCommand()
+    mockConfigLoader.load.mockResolvedValue({ a: 'hello' })
+    const config = await cmd.getFullConfig()
+    const config2 = await cmd.getFullConfig()
+    expect(config).toEqual({ a: 'hello' })
+    expect(config).toEqual(config2)
+    expect(mockConfigLoader.load).toHaveBeenCalledTimes(1)
+  })
 
-// describe('getConfigFileForKey', () => {
-//   test('returns empty object if not found', async () => {
-//     mockConfigLoader.load.mockResolvedValue(getMockConfig('exc', {}))
-//     const cmd = new TheCommand()
-//     expect(await cmd.getConfigFileForKey('notexist.key.abc')).toEqual({})
-//     expect(mockConfigLoader.load).toHaveBeenCalledWith({ validateAppConfig: false })
-//   })
-//   test('returns file and key if found', async () => {
-//     const config = getMockConfig('exc', {})
-//     const cmd = new TheCommand()
-//     mockConfigLoader.load.mockResolvedValue(config)
-//     expect(await cmd.getConfigFileForKey('extensions')).toEqual(config.includeIndex.extensions)
-//   })
-// })
+  test('with options', async () => {
+    const cmd = new TheCommand()
+    mockConfigLoader.load.mockResolvedValue({ a: 'hello' })
+    const config = await cmd.getFullConfig({ someOptions: {} })
+    expect(config).toEqual({ a: 'hello' })
+    expect(mockConfigLoader.load).toHaveBeenCalledWith({ someOptions: {}, validateAppConfig: false })
+  })
 
-// describe('getAppExtConfigs', () => {
-//   test('no extension flags', async () => {
-//     const config = getMockConfig('app-exc-nui', {})
-//     mockConfigLoader.load.mockResolvedValue(config)
-//     const cmd = new TheCommand()
-//     expect(await cmd.getAppExtConfigs({})).toEqual(config.all)
-//     expect(mockConfigLoader.load).toHaveBeenCalledWith({ validateAppConfig: false })
-//   })
-//   test('with options', async () => {
-//     const config = getMockConfig('app-exc-nui', {})
-//     mockConfigLoader.load.mockResolvedValue(config)
-//     const cmd = new TheCommand()
-//     expect(await cmd.getAppExtConfigs({}, { some: 'options' })).toEqual(config.all)
-//     expect(mockConfigLoader.load).toHaveBeenCalledWith({ some: 'options', validateAppConfig: false })
-//   })
-//   test('-e exc -e asset', async () => {
-//     const config = getMockConfig('app-exc-nui', {})
-//     mockConfigLoader.load.mockResolvedValue(config)
-//     const cmd = new TheCommand()
-//     expect(await cmd.getAppExtConfigs({ extension: ['exc', 'asset'] }))
-//       .toEqual({
-//         'dx/excshell/1': config.all['dx/excshell/1'],
-//         'dx/asset-compute/worker/1': config.all['dx/asset-compute/worker/1']
-//       })
-//   })
-//   test('-e application', async () => {
-//     const config = getMockConfig('app-exc-nui', {})
-//     mockConfigLoader.load.mockResolvedValue(config)
-//     const cmd = new TheCommand()
-//     expect(await cmd.getAppExtConfigs({ extension: ['application'] }))
-//       .toEqual({ application: config.all.application })
-//   })
+  test('with validateAppConfig=true', async () => {
+    const cmd = new TheCommand()
+    mockConfigLoader.load.mockResolvedValue({ a: 'hello' })
+    const config = await cmd.getFullConfig({ someOptions: {}, validateAppConfig: true })
+    expect(config).toEqual({ a: 'hello' })
+    expect(mockConfigLoader.load).toHaveBeenCalledWith({ someOptions: {}, validateAppConfig: true })
+  })
+})
 
-//   test('-e application, { validateAppConfig: true }', async () => {
-//     const config = getMockConfig('app-exc-nui', {})
-//     mockConfigLoader.load.mockResolvedValue(config)
-//     const cmd = new TheCommand()
-//     expect(await cmd.getAppExtConfigs({ extension: ['application'] }, { validateAppConfig: true }))
-//       .toEqual({ application: config.all.application })
-//     expect(mockConfigLoader.load).toHaveBeenCalledWith({ validateAppConfig: true })
-//   })
+describe('getConfigFileForKey', () => {
+  test('returns empty object if not found', async () => {
+    const mockConfig = {
+      includeIndex: {
+        somethingElse: {}
+      }
+    }
 
-//   test('-e exc -e notexists', async () => {
-//     const config = getMockConfig('app-exc-nui', {})
-//     mockConfigLoader.load.mockResolvedValue(config)
-//     const cmd = new TheCommand()
-//     await expect(async () => await cmd.getAppExtConfigs({ extension: ['exc', 'notexists'] }))
-//       .rejects.toThrow('No matching extension implementation found for flag \'-e notexists\'')
-//   })
+    mockConfigLoader.load.mockResolvedValue(mockConfig)
+    const cmd = new TheCommand()
+    expect(await cmd.getConfigFileForKey('notexist.key.abc')).toEqual({})
+    expect(mockConfigLoader.load).toHaveBeenCalledWith({ validateAppConfig: false })
+  })
 
-//   test('-e dx (matches more than one)', async () => {
-//     const config = getMockConfig('app-exc-nui', {})
-//     mockConfigLoader.load.mockResolvedValue(config)
-//     const cmd = new TheCommand()
-//     await expect(async () => await cmd.getAppExtConfigs({ extension: ['dx'] }))
-//       .rejects.toThrow('Flag \'-e dx\' matches multiple extension implementation')
-//   })
-// })
+  test('returns file and key if found', async () => {
+    const mockConfig = {
+      includeIndex: {
+        extensions: {
+          someOtherThing: {}
+        }
+      }
+    }
+
+    const cmd = new TheCommand()
+    mockConfigLoader.load.mockResolvedValue(mockConfig)
+    expect(await cmd.getConfigFileForKey('extensions')).toEqual(mockConfig.includeIndex.extensions)
+  })
+})
 
 test('init', async () => {
   const cmd = new TheCommand([])
@@ -231,4 +188,66 @@ test('will handle errors without stack traces when not using --verbose flag', as
   await cmd.catch(errorWithoutStack)
 
   expect(cmd.error).toHaveBeenCalledWith(expect.stringContaining('fake error'))
+})
+
+describe('getAppExtConfigs', () => {
+  test('no extension flags', async () => {
+    const config = {}
+    mockConfigLoader.load.mockResolvedValue(config)
+    const cmd = new TheCommand()
+    expect(await cmd.getAppExtConfigs({})).toEqual(config.all)
+    expect(mockConfigLoader.load).toHaveBeenCalledWith({ validateAppConfig: false })
+  })
+
+  test('with options', async () => {
+    const config = {}
+    mockConfigLoader.load.mockResolvedValue(config)
+    const cmd = new TheCommand()
+    expect(await cmd.getAppExtConfigs({}, { some: 'options' })).toEqual(config.all)
+    expect(mockConfigLoader.load).toHaveBeenCalledWith({ some: 'options', validateAppConfig: false })
+  })
+
+  test('-e exc -e asset', async () => {
+    const config = {}
+    mockConfigLoader.load.mockResolvedValue(config)
+    const cmd = new TheCommand()
+    expect(await cmd.getAppExtConfigs({ extension: ['exc', 'asset'] }))
+      .toEqual({
+        'dx/excshell/1': config.all['dx/excshell/1'],
+        'dx/asset-compute/worker/1': config.all['dx/asset-compute/worker/1']
+      })
+  })
+
+  test('-e application', async () => {
+    const config = {}
+    mockConfigLoader.load.mockResolvedValue(config)
+    const cmd = new TheCommand()
+    expect(await cmd.getAppExtConfigs({ extension: ['application'] }))
+      .toEqual({ application: config.all.application })
+  })
+
+  test('-e application, { validateAppConfig: true }', async () => {
+    const config = {}
+    mockConfigLoader.load.mockResolvedValue(config)
+    const cmd = new TheCommand()
+    expect(await cmd.getAppExtConfigs({ extension: ['application'] }, { validateAppConfig: true }))
+      .toEqual({ application: config.all.application })
+    expect(mockConfigLoader.load).toHaveBeenCalledWith({ validateAppConfig: true })
+  })
+
+  test('-e exc -e notexists', async () => {
+    const config = {}
+    mockConfigLoader.load.mockResolvedValue(config)
+    const cmd = new TheCommand()
+    await expect(async () => await cmd.getAppExtConfigs({ extension: ['exc', 'notexists'] }))
+      .rejects.toThrow('No matching extension implementation found for flag \'-e notexists\'')
+  })
+
+  test('-e dx (matches more than one)', async () => {
+    const config = {}
+    mockConfigLoader.load.mockResolvedValue(config)
+    const cmd = new TheCommand()
+    await expect(async () => await cmd.getAppExtConfigs({ extension: ['dx'] }))
+      .rejects.toThrow('Flag \'-e dx\' matches multiple extension implementation')
+  })
 })

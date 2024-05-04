@@ -12,7 +12,7 @@ governing permissions and limitations under the License.
 const { Command, Flags } = require('@oclif/core')
 const chalk = require('chalk')
 const coreConfig = require('@adobe/aio-lib-core-config')
-const configLoader = require('@adobe/aio-cli-lib-app-config')
+const appConfig = require('@adobe/aio-cli-lib-app-config')
 const inquirer = require('inquirer')
 const aioLogger = require('@adobe/aio-lib-core-logging')('@adobe/aio-cli-plugin-app-dev', { level: process.env.LOG_LEVEL, provider: 'winston' })
 const { DEFAULT_LAUNCH_PREFIX, STAGE_LAUNCH_PREFIX } = require('./lib/constants')
@@ -81,9 +81,9 @@ class BaseCommand extends Command {
     return ret
   }
 
-  getConfigFileForKey (fullKey) {
+  async getConfigFileForKey (fullKey) {
     // NOTE: the index returns undefined if the key is loaded from a legacy configuration file
-    const fullConfig = this.getFullConfig()
+    const fullConfig = await this.getFullConfig()
     // full key like 'extensions.dx/excshell/1.runtimeManifest'
     // returns { key: relKey, file: configFile}
     const configData = fullConfig.includeIndex[fullKey]
@@ -96,8 +96,12 @@ class BaseCommand extends Command {
   }
 
   async getFullConfig (options = {}) {
+    // validate appConfig defaults to false for now
+    const validateAppConfig = options.validateAppConfig === true
+
     if (!this.appConfig) {
-      this.appConfig = await configLoader.load(options)
+      // this will explicitly set validateAppConfig=false if not set
+      this.appConfig = await appConfig.load({ ...options, validateAppConfig })
     }
     return this.appConfig
   }
