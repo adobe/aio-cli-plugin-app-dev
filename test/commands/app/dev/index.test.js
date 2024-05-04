@@ -13,6 +13,7 @@ governing permissions and limitations under the License.
 /* eslint-disable no-unused-vars */
 const TheCommand = require('../../../../src/commands/app/dev')
 const BaseCommand = require('../../../../src/BaseCommand')
+const Cleanup = require('../../../../src/lib/cleanup')
 
 const cloneDeep = require('lodash.clonedeep')
 const open = require('open')
@@ -28,6 +29,9 @@ jest.mock('open', () => jest.fn())
 jest.mock('../../../../src/lib/run-dev')
 jest.mock('../../../../src/lib/app-helper')
 jest.mock('fs-extra')
+
+process.exit = jest.fn()
+process.on = jest.fn()
 
 jest.mock('node:https', () => {
   return {
@@ -76,8 +80,16 @@ beforeEach(() => {
   ux.wait = jest.fn()
 })
 
-afterEach(() => {
+afterEach(async () => {
   jest.clearAllMocks()
+
+  // this is to run the cleanup, on SIGINT
+  process.on.mockImplementation(async (eventName, fn) => {
+    if (eventName === 'SIGINT') {
+      // call the fn immediately as if SIGINT was sent
+      await fn()
+    }
+  })
 })
 
 describe('run command definition', () => {
@@ -132,8 +144,8 @@ describe('run', () => {
     command.getLaunchUrlPrefix = jest.fn(() => 'https://my.launch.prefix/?localDevUrl=')
   })
 
-  test('run, no flags, one extension', async () => {
-    command.argv = []
+  test('run, verbose flag, one extension', async () => {
+    command.argv = ['--verbose']
     const appConfig = {
       hooks: {
       },
@@ -144,9 +156,19 @@ describe('run', () => {
     }
 
     command.getAppExtConfigs.mockResolvedValueOnce({ myextension: appConfig })
-    mockRunDev.mockResolvedValue({ frontEndUrl: 'https://localhost:9080', actionUrls: {} })
+    const serverCleanup = () => console.log('server cleanup')
+    mockRunDev.mockResolvedValue({
+      frontEndUrl: 'https://localhost:9080',
+      actionUrls: {
+        'generic/action1': 'https://localhost:9080/api/v1/web/action1',
+        'generic/action2': 'https://localhost:9080/api/v1/action2'
+      },
+      serverCleanup: () => {}
+    })
 
     await command.run()
+    const cleanup = new Cleanup()
+    await cleanup.run()
     expect(command.log).toHaveBeenCalledWith('press CTRL+C to terminate the dev environment') // success
     expect(command.error).not.toHaveBeenCalled()
   })
@@ -163,9 +185,59 @@ describe('run', () => {
     }
 
     command.getAppExtConfigs.mockResolvedValueOnce({ myextension: appConfig })
-    mockRunDev.mockResolvedValue({ frontEndUrl: 'https://localhost:9080', actionUrls: {} })
+    mockRunDev.mockResolvedValue({
+      frontEndUrl: 'https://localhost:9080',
+      actionUrls: {},
+      serverCleanup: () => {}
+    })
 
     await expect(command.run()).rejects.toThrow('nothing to run... there is no frontend and no manifest.yml, are you in a valid app?')
+  })
+
+  test('run, no flags, no frontend, has backend', async () => {
+    command.argv = []
+    const appConfig = {
+      hooks: {
+      },
+      app: {
+        hasFrontend: false,
+        hasBackend: true
+      }
+    }
+
+    command.getAppExtConfigs.mockResolvedValueOnce({ myextension: appConfig })
+    mockRunDev.mockResolvedValue({
+      frontEndUrl: 'https://localhost:9080',
+      actionUrls: {},
+      serverCleanup: () => {}
+    })
+
+    await command.run()
+    expect(command.log).toHaveBeenCalledWith('press CTRL+C to terminate the dev environment') // success
+    expect(command.error).not.toHaveBeenCalled()
+  })
+
+  test('run, no flags, has frontend, no backend', async () => {
+    command.argv = []
+    const appConfig = {
+      hooks: {
+      },
+      app: {
+        hasFrontend: true,
+        hasBackend: false
+      }
+    }
+
+    command.getAppExtConfigs.mockResolvedValueOnce({ myextension: appConfig })
+    mockRunDev.mockResolvedValue({
+      frontEndUrl: 'https://localhost:9080',
+      actionUrls: {},
+      serverCleanup: () => {}
+    })
+
+    await command.run()
+    expect(command.log).toHaveBeenCalledWith('press CTRL+C to terminate the dev environment') // success
+    expect(command.error).not.toHaveBeenCalled()
   })
 
   test('run, no flags, runInProcess exception', async () => {
@@ -181,7 +253,11 @@ describe('run', () => {
     }
 
     command.getAppExtConfigs.mockResolvedValueOnce({ myextension: appConfig })
-    mockRunDev.mockResolvedValue({ frontEndUrl: 'https://localhost:9080', actionUrls: {} })
+    mockRunDev.mockResolvedValue({
+      frontEndUrl: 'https://localhost:9080',
+      actionUrls: {},
+      serverCleanup: () => {}
+    })
     mockHelpers.runInProcess.mockRejectedValue(errMessage)
 
     // an error in runInProcess should not stop the rest of the command
@@ -241,7 +317,11 @@ describe('run', () => {
     }
 
     command.getAppExtConfigs.mockResolvedValueOnce({ myextension: appConfig, anotherextension: appConfig })
-    mockRunDev.mockResolvedValue({ frontEndUrl: 'https://localhost:9080', actionUrls: {} })
+    mockRunDev.mockResolvedValue({
+      frontEndUrl: 'https://localhost:9080',
+      actionUrls: {},
+      serverCleanup: () => {}
+    })
 
     await expect(command.run()).rejects.toThrow('Your app implements multiple extensions. You can only run one at the time, please select which extension to run with the \'-e\' flag.')
   })
@@ -259,7 +339,11 @@ describe('run', () => {
     }
 
     command.getAppExtConfigs.mockResolvedValueOnce({ someOtherExtension: {}, [myExtension]: appConfig })
-    mockRunDev.mockResolvedValue({ frontEndUrl: 'https://localhost:9080', actionUrls: {} })
+    mockRunDev.mockResolvedValue({
+      frontEndUrl: 'https://localhost:9080',
+      actionUrls: {},
+      serverCleanup: () => {}
+    })
 
     await command.run()
     expect(command.log).toHaveBeenCalledWith('press CTRL+C to terminate the dev environment') // success
@@ -279,7 +363,11 @@ describe('run', () => {
     }
 
     command.getAppExtConfigs.mockResolvedValueOnce({ myextension: appConfig })
-    mockRunDev.mockResolvedValue({ frontEndUrl: 'https://localhost:9080', actionUrls: {} })
+    mockRunDev.mockResolvedValue({
+      frontEndUrl: 'https://localhost:9080',
+      actionUrls: {},
+      serverCleanup: () => {}
+    })
 
     await expect(command.run()).rejects.toThrow(`extension '${theExtension}' was not found.`)
   })
@@ -296,7 +384,11 @@ describe('run', () => {
     }
 
     command.getAppExtConfigs.mockResolvedValueOnce({ myextension: appConfig })
-    mockRunDev.mockResolvedValue({ frontEndUrl: 'https://localhost:9080', actionUrls: {} })
+    mockRunDev.mockResolvedValue({
+      frontEndUrl: 'https://localhost:9080',
+      actionUrls: {},
+      serverCleanup: () => {}
+    })
 
     await command.run()
     expect(command.log).toHaveBeenCalledWith('press CTRL+C to terminate the dev environment') // success
