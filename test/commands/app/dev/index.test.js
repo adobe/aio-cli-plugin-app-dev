@@ -369,9 +369,7 @@ describe('getOrGenerateCertificates', () => {
   })
 
   test('cert not accepted in the browser', async () => {
-    // TODO:
     mockHttps.createServer.mockImplementationOnce(() => {
-      // do nothing with callbacks
       return {
         listen: jest.fn((_, fn) => {
           fn && fn() // call right away
@@ -379,7 +377,8 @@ describe('getOrGenerateCertificates', () => {
         close: jest.fn()
       }
     })
-    await expect(command.getOrGenerateCertificates(certConfig))
+
+    await expect(command.getOrGenerateCertificates({ ...certConfig, maxWaitTimeSeconds: 0.5 }))
       .resolves.toEqual({ cert: certConfig.pubCertPath, key: certConfig.privateKeyPath })
   })
 })

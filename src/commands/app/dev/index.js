@@ -149,7 +149,7 @@ class Dev extends BaseCommand {
     this.log('press CTRL+C to terminate the dev environment')
   }
 
-  async getOrGenerateCertificates ({ pubCertPath, privateKeyPath, devKeysDir, devKeysConfigKey }) {
+  async getOrGenerateCertificates ({ pubCertPath, privateKeyPath, devKeysDir, devKeysConfigKey, maxWaitTimeSeconds = 20 }) {
     const certs = {
       cert: pubCertPath, // Path to custom certificate
       key: privateKeyPath // Path to custom key
@@ -207,10 +207,9 @@ class Dev extends BaseCommand {
     open(`https://localhost:${actualPort}`)
     ux.action.start('Waiting for the certificate to be accepted.')
 
-    const waitFor20s = 20000
     // eslint-disable-next-line no-unmodified-loop-condition
-    while (!certAccepted && (Date.now() - startTime) < waitFor20s) {
-      await ux.wait()
+    while (!certAccepted && (Date.now() - startTime) < (maxWaitTimeSeconds * 1000)) {
+      await new Promise(resolve => setTimeout(resolve, 1000)) // wait for 1 second
     }
 
     if (certAccepted) {
