@@ -22,6 +22,7 @@ const { runDev: mockRunDev } = require('../../../../src/lib/run-dev')
 const mockHelpers = require('../../../../src/lib/app-helper')
 const mockFS = require('fs-extra')
 const mockConfig = require('@adobe/aio-lib-core-config')
+const mockHttps = require('node:https')
 
 jest.mock('open', () => jest.fn())
 jest.mock('../../../../src/lib/run-dev')
@@ -304,4 +305,81 @@ describe('run', () => {
 })
 
 describe('getOrGenerateCertificates', () => {
+  let command
+  const mockFindCommandRun = jest.fn()
+  const mockFindCommandLoad = jest.fn().mockReturnValue({
+    run: mockFindCommandRun
+  })
+
+  const certConfig = {
+    pubCertPath: 'pub.crt',
+    privateKeyPath: 'private.key',
+    devKeysDir: 'dev-keys',
+    devKeysConfigKey: 'aio.dev-keys'
+  }
+
+  beforeEach(() => {
+    command = new TheCommand()
+    // command.error = jest.fn((message) => { throw new Error(message) })
+    // command.log = jest.fn()
+    command.config = {
+      findCommand: jest.fn().mockReturnValue({
+        load: mockFindCommandLoad
+      })
+      // dataDir: '/data/dir'
+    }
+    // command.appConfig = cloneDeep(mockConfigData)
+    // command.getAppExtConfigs = jest.fn()
+    // command.getLaunchUrlPrefix = jest.fn(() => 'https://my.launch.prefix/?localDevUrl=')
+  })
+
+  test('no existing certs', async () => {
+    await expect(command.getOrGenerateCertificates(certConfig))
+      .resolves.toEqual({ cert: certConfig.pubCertPath, key: certConfig.privateKeyPath })
+  })
+
+  test('existing certs on disk', async () => {
+    mockFS.existsSync.mockImplementation((filePath) => {
+      return (filePath === certConfig.pubCertPath) || (filePath === certConfig.privateKeyPath)
+    })
+
+    await expect(command.getOrGenerateCertificates(certConfig))
+      .resolves.toEqual({ cert: certConfig.pubCertPath, key: certConfig.privateKeyPath })
+  })
+
+  test('existing certs in config', async () => {
+    mockConfig.get.mockImplementation((key) => {
+      if (key === certConfig.devKeysConfigKey) {
+        return {
+          publicCert: certConfig.pubCertPath,
+          privateKey: certConfig.privateKeyPath
+        }
+      }
+    })
+
+    await expect(command.getOrGenerateCertificates(certConfig))
+      .resolves.toEqual({ cert: certConfig.pubCertPath, key: certConfig.privateKeyPath })
+  })
+
+  test('cannot find cert plugin', async () => {
+    command.config.findCommand.mockReturnValue(null)
+
+    await expect(command.getOrGenerateCertificates(certConfig))
+      .rejects.toThrow('error while generating certificate - no certificate:generate command found')
+  })
+
+  test('cert not accepted in the browser', async () => {
+    // TODO:
+    mockHttps.createServer.mockImplementationOnce(() => {
+      // do nothing with callbacks
+      return {
+        listen: jest.fn((_, fn) => {
+          fn && fn() // call right away
+        }),
+        close: jest.fn()
+      }
+    })
+    await expect(command.getOrGenerateCertificates(certConfig))
+      .resolves.toEqual({ cert: certConfig.pubCertPath, key: certConfig.privateKeyPath })
+  })
 })

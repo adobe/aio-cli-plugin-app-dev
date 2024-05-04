@@ -116,7 +116,12 @@ class Dev extends BaseCommand {
 
     // check if there are certificates available, and generate them if not
     try {
-      runOptions.parcel.https = await this.getOrGenerateCertificates()
+      runOptions.parcel.https = await this.getOrGenerateCertificates({
+        pubCertPath: PUB_CERT_PATH,
+        privateKeyPath: PRIVATE_KEY_PATH,
+        devKeysDir: DEV_KEYS_DIR,
+        devKeysConfigKey: DEV_KEYS_CONFIG_KEY
+      })
     } catch (error) {
       console.error(error)
       this.error(error)
@@ -144,25 +149,25 @@ class Dev extends BaseCommand {
     this.log('press CTRL+C to terminate the dev environment')
   }
 
-  async getOrGenerateCertificates () {
+  async getOrGenerateCertificates ({ pubCertPath, privateKeyPath, devKeysDir, devKeysConfigKey }) {
     const certs = {
-      cert: PUB_CERT_PATH, // Path to custom certificate
-      key: PRIVATE_KEY_PATH // Path to custom key
+      cert: pubCertPath, // Path to custom certificate
+      key: privateKeyPath // Path to custom key
     }
 
     /* get existing certificates from file.. */
-    if (fs.existsSync(PRIVATE_KEY_PATH) && fs.existsSync(PUB_CERT_PATH)) {
+    if (fs.existsSync(privateKeyPath) && fs.existsSync(pubCertPath)) {
       return certs
     }
 
-    await fs.ensureDir(DEV_KEYS_DIR)
+    await fs.ensureDir(devKeysDir)
 
     /* or get existing certificates from config.. */
-    const devConfig = coreConfig.get(DEV_KEYS_CONFIG_KEY)
-    if (devConfig && devConfig.privateKey && devConfig.publicCert) {
+    const devConfig = coreConfig.get(devKeysConfigKey)
+    if (devConfig?.privateKey && devConfig?.publicCert) {
       // yes? write them to file
-      await fs.writeFile(PRIVATE_KEY_PATH, devConfig.privateKey)
-      await fs.writeFile(PUB_CERT_PATH, devConfig.publicCert)
+      await fs.writeFile(privateKeyPath, devConfig.privateKey)
+      await fs.writeFile(pubCertPath, devConfig.publicCert)
 
       return certs
     }
@@ -172,17 +177,17 @@ class Dev extends BaseCommand {
     const CertCmd = this.config.findCommand('certificate:generate')
     if (CertCmd) {
       const Instance = await CertCmd.load()
-      await Instance.run([`--keyout=${PRIVATE_KEY_PATH}`, `--out=${PUB_CERT_PATH}`, '-n=DeveloperSelfSigned.cert'])
+      await Instance.run([`--keyout=${privateKeyPath}`, `--out=${pubCertPath}`, '-n=DeveloperSelfSigned.cert'])
     } else {
       // could not find the cert command, error is caught below
       throw new Error('error while generating certificate - no certificate:generate command found')
     }
 
     // 2. store them globally in config
-    const privateKey = (await fs.readFile(PRIVATE_KEY_PATH, { encoding: 'utf8' }))
-    const publicCert = (await fs.readFile(PUB_CERT_PATH), { encoding: 'utf8' })
-    coreConfig.set(`${DEV_KEYS_CONFIG_KEY}.privateKey`, privateKey)
-    coreConfig.set(`${DEV_KEYS_CONFIG_KEY}.publicCert`, publicCert)
+    const privateKey = (await fs.readFile(privateKeyPath, { encoding: 'utf8' }))
+    const publicCert = (await fs.readFile(pubCertPath), { encoding: 'utf8' })
+    coreConfig.set(`${devKeysConfigKey}.privateKey`, privateKey)
+    coreConfig.set(`${devKeysConfigKey}.publicCert`, publicCert)
 
     // 3. ask the developer to accept them
     let certAccepted = false
@@ -202,8 +207,9 @@ class Dev extends BaseCommand {
     open(`https://localhost:${actualPort}`)
     ux.action.start('Waiting for the certificate to be accepted.')
 
+    const waitFor20s = 20000
     // eslint-disable-next-line no-unmodified-loop-condition
-    while (!certAccepted && Date.now() - startTime < 20000) {
+    while (!certAccepted && (Date.now() - startTime) < waitFor20s) {
       await ux.wait()
     }
 
