@@ -19,58 +19,52 @@ const fetch = createFetch()
 const https = require('node:https')
 
 jest.unmock('execa')
-
 jest.setTimeout(30000)
-let devServerProcess
+
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: false
+})
+
+const waitForServerReady = async ({ host, startTime, period, timeout, lastStatus }) => {
+  if (Date.now() > (startTime + timeout)) {
+    throw new Error(`local dev server startup timed out after ${timeout}ms due to ${lastStatus}`)
+  }
+
+  let ok, status
+
+  try {
+    const response = await fetch(host, { agent: httpsAgent })
+    ok = response.ok
+    status = response.statusText
+  } catch (e) {
+    ok = false
+    status = e.toString()
+  }
+
+  if (!ok) {
+    await waitFor(period)
+    return waitForServerReady({ host, startTime, period, timeout, status })
+  }
+}
+
+const waitFor = (t) => {
+  return new Promise(resolve => setTimeout(resolve, t))
+}
+
+const startServer = ({ e2eProject, port }) => {
+  const cwd = path.join(__dirname, e2eProject)
+  const cmd = path.join(__dirname, '..', 'bin', 'run')
+
+  return execa.command(`${cmd} app dev`, {
+    stdio: 'inherit',
+    env: { LOG_LEVEL: 'info', SERVER_DEFAULT_PORT: port },
+    cwd
+  })
+}
 
 beforeAll(async () => {
   stdout.start()
   stdout.print = true
-
-  const cwd = path.join(__dirname, 'test-project')
-  const cmd = path.join(__dirname, '..', 'bin', 'run')
-
-  devServerProcess = execa.command(`${cmd} app dev`, {
-    stdio: 'inherit',
-    env: { LOG_LEVEL: 'info' },
-    cwd
-  })
-
-  // wait until server is ready
-  const timeOutSeconds = 10
-  let timedOut = false
-  let ready = false
-
-  const timerId = setTimeout(() => {
-    timedOut = true
-  }, timeOutSeconds * 1000)
-
-  do {
-    try {
-      const httpsAgent = new https.Agent({
-        rejectUnauthorized: false
-      })
-
-      const { ok, status } = await fetch('https://127.0.0.1:9080', { agent: httpsAgent })
-      if (ok && status === 200) {
-        ready = true
-      }
-    } catch (e) {
-      console.error(e)
-    }
-  // eslint-disable-next-line no-unmodified-loop-condition
-  } while (!ready && !timedOut)
-
-  clearTimeout(timerId)
-  if (timedOut) {
-    throw new Error('Timed out waiting for the dev server to be ready.')
-  }
-})
-
-afterAll(() => {
-  console.log('killed server', devServerProcess.kill('SIGTERM', {
-    forceKillAfterTimeout: 2000
-  }))
 })
 
 test('boilerplate help test', async () => {
@@ -84,5 +78,53 @@ test('boilerplate help test', async () => {
   console.log(chalk.green(`    - done for ${chalk.bold(name)}`))
 })
 
-test('launch and kill the dev server', async () => {
+describe('test-project', () => {
+  const port = 9080
+  let serverProcess
+
+  beforeAll(async () => {
+    serverProcess = startServer({ e2eProject: 'test-project', port })
+    const timeoutMs = 10000
+    await waitForServerReady({
+      host: `https://127.0.0.1:${port}`,
+      startTime: Date.now(),
+      period: 1000,
+      timeout: timeoutMs
+    })
+  })
+
+  afterAll(() => {
+    console.log(`killed server at port ${port}:`, serverProcess.kill('SIGTERM', {
+      forceKillAfterTimeout: 2000
+    }))
+  })
+
+  test('front end is available', async () => {
+    const host = 'https://localhost:9080/index.html'
+
+    const response = await fetch(host, { agent: httpsAgent })
+    expect(response.ok).toBeTruthy()
+    expect(response.status).toEqual(200)
+  })
+
+  test('action requires adobe auth (*no* auth provided)', async () => {
+    const host = 'https://localhost:9080/api/v1/web/dx-excshell-1/requireAdobeAuth'
+
+    const response = await fetch(host, { agent: httpsAgent })
+    expect(response.ok).toBeFalsy()
+    expect(response.status).toEqual(401)
+  })
+
+  test('action requires adobe auth (auth is provided)', async () => {
+    const host = 'https://localhost:9080/api/v1/web/dx-excshell-1/requireAdobeAuth'
+
+    const response = await fetch(host, {
+      agent: httpsAgent,
+      headers: {
+        Authorization: 'something'
+      }
+    })
+    expect(response.ok).toBeTruthy()
+    expect(response.status).toEqual(200)
+  })
 })
