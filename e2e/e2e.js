@@ -86,7 +86,7 @@ describe('test-project', () => {
     serverProcess = startServer({ e2eProject: 'test-project', port })
     const timeoutMs = 10000
     await waitForServerReady({
-      host: `https://127.0.0.1:${port}`,
+      host: `https://localhost:${port}`,
       startTime: Date.now(),
       period: 1000,
       timeout: timeoutMs
@@ -100,25 +100,25 @@ describe('test-project', () => {
   })
 
   test('front end is available', async () => {
-    const host = 'https://localhost:9080/index.html'
+    const url = `https://localhost:${port}/index.html`
 
-    const response = await fetch(host, { agent: httpsAgent })
+    const response = await fetch(url, { agent: httpsAgent })
     expect(response.ok).toBeTruthy()
     expect(response.status).toEqual(200)
   })
 
   test('action requires adobe auth (*no* auth provided)', async () => {
-    const host = 'https://localhost:9080/api/v1/web/dx-excshell-1/requireAdobeAuth'
+    const url = `https://localhost:${port}/api/v1/web/dx-excshell-1/requireAdobeAuth`
 
-    const response = await fetch(host, { agent: httpsAgent })
+    const response = await fetch(url, { agent: httpsAgent })
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(401)
   })
 
   test('action requires adobe auth (auth is provided)', async () => {
-    const host = 'https://localhost:9080/api/v1/web/dx-excshell-1/requireAdobeAuth'
+    const url = `https://localhost:${port}/api/v1/web/dx-excshell-1/requireAdobeAuth`
 
-    const response = await fetch(host, {
+    const response = await fetch(url, {
       agent: httpsAgent,
       headers: {
         Authorization: 'something'
