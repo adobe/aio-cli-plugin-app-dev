@@ -192,7 +192,7 @@ test('will handle errors without stack traces when not using --verbose flag', as
 
 describe('getAppExtConfigs', () => {
   test('no extension flags', async () => {
-    const config = {}
+    const config = { all: {} }
     mockConfigLoader.load.mockResolvedValue(config)
     const cmd = new TheCommand()
     expect(await cmd.getAppExtConfigs({})).toEqual(config.all)
@@ -200,7 +200,7 @@ describe('getAppExtConfigs', () => {
   })
 
   test('with options', async () => {
-    const config = {}
+    const config = { all: {} }
     mockConfigLoader.load.mockResolvedValue(config)
     const cmd = new TheCommand()
     expect(await cmd.getAppExtConfigs({}, { some: 'options' })).toEqual(config.all)
@@ -208,7 +208,12 @@ describe('getAppExtConfigs', () => {
   })
 
   test('-e exc -e asset', async () => {
-    const config = {}
+    const config = {
+      all: {
+        'dx/excshell/1': {},
+        'dx/asset-compute/worker/1': {}
+      }
+    }
     mockConfigLoader.load.mockResolvedValue(config)
     const cmd = new TheCommand()
     expect(await cmd.getAppExtConfigs({ extension: ['exc', 'asset'] }))
@@ -219,7 +224,12 @@ describe('getAppExtConfigs', () => {
   })
 
   test('-e application', async () => {
-    const config = {}
+    const config = {
+      all: {
+        application: {},
+        someOtherExtension: {}
+      }
+    }
     mockConfigLoader.load.mockResolvedValue(config)
     const cmd = new TheCommand()
     expect(await cmd.getAppExtConfigs({ extension: ['application'] }))
@@ -227,7 +237,12 @@ describe('getAppExtConfigs', () => {
   })
 
   test('-e application, { validateAppConfig: true }', async () => {
-    const config = {}
+    const config = {
+      all: {
+        application: {},
+        someOtherExtension: {}
+      }
+    }
     mockConfigLoader.load.mockResolvedValue(config)
     const cmd = new TheCommand()
     expect(await cmd.getAppExtConfigs({ extension: ['application'] }, { validateAppConfig: true }))
@@ -236,15 +251,26 @@ describe('getAppExtConfigs', () => {
   })
 
   test('-e exc -e notexists', async () => {
-    const config = {}
+    const config = {
+      all: {
+        'dx/excshell/1': {}
+      }
+    }
     mockConfigLoader.load.mockResolvedValue(config)
+
     const cmd = new TheCommand()
     await expect(async () => await cmd.getAppExtConfigs({ extension: ['exc', 'notexists'] }))
       .rejects.toThrow('No matching extension implementation found for flag \'-e notexists\'')
   })
 
   test('-e dx (matches more than one)', async () => {
-    const config = {}
+    const config = {
+      all: {
+        'dx/excshell/1': {},
+        'dx/foobar/1': {}
+      }
+    }
+
     mockConfigLoader.load.mockResolvedValue(config)
     const cmd = new TheCommand()
     await expect(async () => await cmd.getAppExtConfigs({ extension: ['dx'] }))
