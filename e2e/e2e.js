@@ -215,4 +215,20 @@ describe('test-project http api tests', () => {
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(404)
   })
+
+  test('sequence with an action that throws an error (500)', async () => {
+    const url = createApiUrl({ isWeb: false, actionName: 'sequenceWithActionThatThrowsError' })
+
+    const response = await fetch(url, { agent: httpsAgent })
+    expect(response.ok).toBeFalsy()
+    expect(response.status).toEqual(500)
+  })
+
+  test('sequence with an action that has no main export (401)', async () => {
+    const url = createApiUrl({ isWeb: false, actionName: 'sequenceWithActionThatHasNoMainExport' })
+
+    const response = await fetch(url, { agent: httpsAgent })
+    expect(response.ok).toBeFalsy()
+    expect(response.status).toEqual(401)
+  })
 })

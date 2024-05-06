@@ -311,8 +311,12 @@ async function invokeSequence ({ req, res, sequence, actionRequestContext, logge
       logger.info('calling action', actionName)
       // TODO: pass last action response to the next action
       lastActionResponse = await invokeAction({ req, actionRequestContext: context, logger })
+      const isError = lastActionResponse.statusCode >= 400
       logger.debug('action response for', actionName, JSON.stringify(lastActionResponse, null, 2))
-      // TODO: do we short circuit the actions if the status code is an error?
+      // we short circuit the actions if the status code is an error
+      if (isError) {
+        break
+      }
     } else {
       lastActionResponse = { statusCode: 404, statusMessage: `${actionName} in sequence not found` }
       break
