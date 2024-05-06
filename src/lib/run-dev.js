@@ -359,10 +359,10 @@ async function invokeAction ({ actionRequestContext, logger }) {
               }
         */
         if (response.error) {
-          statusCode = response.error.statusCode || 400 // TODO: what should error statusCode be if omitted?
+          statusCode = response.error.statusCode || 200 // this is the OW default if omitted
           body = response.error.body
         } else {
-          statusCode = response.statusCode || 200
+          statusCode = response.statusCode || 200 // this is the OW default if omitted
           body = response.body
         }
       } else { // no response data
