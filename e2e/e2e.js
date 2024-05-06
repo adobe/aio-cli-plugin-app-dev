@@ -70,15 +70,15 @@ beforeAll(async () => {
 test('boilerplate help test', async () => {
   const packagejson = JSON.parse(fs.readFileSync('package.json').toString())
   const name = `${packagejson.name}`
-  console.log(chalk.blue(`> e2e tests for ${chalk.bold(name)}`))
+  console.log(`> e2e tests for ${chalk.bold(name)}`)
 
-  console.log(chalk.dim('    - boilerplate help ..'))
-  expect(() => { execa.sync('./bin/run', ['--help'], { stderr: 'inherit' }) }).not.toThrow()
+  console.log('    - boilerplate help ..')
+  expect(() => { execa.sync('./bin/run', ['--help'], { stdio: 'inherit' }) }).not.toThrow()
 
-  console.log(chalk.green(`    - done for ${chalk.bold(name)}`))
+  console.log(`    - done for ${chalk.bold(name)}`)
 })
 
-describe('test-project', () => {
+describe('test-project http api tests', () => {
   const port = 9080
   let serverProcess
 
@@ -99,7 +99,7 @@ describe('test-project', () => {
     }))
   })
 
-  test('front end is available', async () => {
+  test('front end is available (200)', async () => {
     const url = `https://localhost:${port}/index.html`
 
     const response = await fetch(url, { agent: httpsAgent })
@@ -107,7 +107,7 @@ describe('test-project', () => {
     expect(response.status).toEqual(200)
   })
 
-  test('action requires adobe auth (*no* auth provided)', async () => {
+  test('web action requires adobe auth, *no* auth provided (401)', async () => {
     const url = `https://localhost:${port}/api/v1/web/dx-excshell-1/requireAdobeAuth`
 
     const response = await fetch(url, { agent: httpsAgent })
@@ -115,7 +115,7 @@ describe('test-project', () => {
     expect(response.status).toEqual(401)
   })
 
-  test('action requires adobe auth (auth is provided)', async () => {
+  test('web action requires adobe auth, auth is provided (200)', async () => {
     const url = `https://localhost:${port}/api/v1/web/dx-excshell-1/requireAdobeAuth`
 
     const response = await fetch(url, {
@@ -126,5 +126,86 @@ describe('test-project', () => {
     })
     expect(response.ok).toBeTruthy()
     expect(response.status).toEqual(200)
+  })
+
+  test('web actions (no adobe auth) (200)', async () => {
+    // 1. action sends response object
+    {
+      const url = `https://localhost:${port}/api/v1/web/dx-excshell-1/noAdobeAuth`
+
+      const response = await fetch(url, { agent: httpsAgent })
+      expect(response.ok).toBeTruthy()
+      expect(response.status).toEqual(200)
+    }
+    // 1. action *does not* send response object
+    {
+      const url = `https://localhost:${port}/api/v1/web/dx-excshell-1/noResponseObject`
+
+      const response = await fetch(url, { agent: httpsAgent })
+      expect(response.ok).toBeTruthy()
+      expect(response.status).toEqual(200)
+    }
+  })
+
+  test('web action is not found (404)', async () => {
+    const url = `https://localhost:${port}/api/v1/web/dx-excshell-1/SomeActionThatDoesNotExist`
+
+    const response = await fetch(url, { agent: httpsAgent })
+    expect(response.ok).toBeFalsy()
+    expect(response.status).toEqual(404)
+  })
+
+  test('web action throws an exception (500)', async () => {
+    const url = `https://localhost:${port}/api/v1/web/dx-excshell-1/throwsError`
+
+    const response = await fetch(url, { agent: httpsAgent })
+    expect(response.ok).toBeFalsy()
+    expect(response.status).toEqual(500)
+  })
+
+  test('web action does not have a main function export (401)', async () => {
+    const url = `https://localhost:${port}/api/v1/web/dx-excshell-1/noMainExport`
+
+    const response = await fetch(url, { agent: httpsAgent })
+    expect(response.ok).toBeFalsy()
+    expect(response.status).toEqual(401)
+  })
+
+  test('non-web actions should always be unauthorized (401)', async () => {
+    const expectedStatusCode = 401
+
+    // 1. non-web action exists
+    {
+      const url = `https://localhost:${port}/api/v1/dx-excshell-1/actionIsNonWeb`
+
+      const response = await fetch(url, { agent: httpsAgent })
+      expect(response.ok).toBeFalsy()
+      expect(response.status).toEqual(expectedStatusCode)
+    }
+
+    // 2. non-web action not found
+    {
+      const url = `https://localhost:${port}/api/v1/dx-excshell-1/SomeActionThatDoesNotExist`
+
+      const response = await fetch(url, { agent: httpsAgent })
+      expect(response.ok).toBeFalsy()
+      expect(response.status).toEqual(expectedStatusCode)
+    }
+  })
+
+  test('sequence with all actions available (200)', async () => {
+    const url = `https://localhost:${port}/api/v1/dx-excshell-1/sequenceWithAllActionsAvailable`
+
+    const response = await fetch(url, { agent: httpsAgent })
+    expect(response.ok).toBeTruthy()
+    expect(response.status).toEqual(200)
+  })
+
+  test('sequence with missing action (404)', async () => {
+    const url = `https://localhost:${port}/api/v1/dx-excshell-1/sequenceWithMissingAction`
+
+    const response = await fetch(url, { agent: httpsAgent })
+    expect(response.ok).toBeFalsy()
+    expect(response.status).toEqual(404)
   })
 })

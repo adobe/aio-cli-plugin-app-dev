@@ -44,6 +44,14 @@ const { SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_P
  */
 
 /**
+ * @typedef {object} ActionResponse
+ * @property {object} headers the response headers
+ * @property {object} statusCode the HTTP status code
+ * @property {object} statusMessage the HTTP status message
+ * @property {object} body the response body
+ */
+
+/**
  * The function that runs the http server to serve the actions, and the web source.
  *
  * @param {object} runOptions the run options
@@ -166,7 +174,7 @@ async function runDev (runOptions, config, _inprocHookRunner) {
 
   // serveAction needs to clear cache for each request, so we get live changes
   app.all(`/${DEV_API_WEB_PREFIX}/*`, (req, res) => serveWebAction(req, res, actionConfig))
-  app.all(`/${DEV_API_PREFIX}/*`, (req, res) => serveNonWebAction(req, res))
+  app.all(`/${DEV_API_PREFIX}/*`, (req, res) => serveNonWebActionOrSequence(req, res, actionConfig))
 
   const server = https.createServer(serverOptions, app)
   server.listen(serverPort, () => {
@@ -240,14 +248,30 @@ function isRawWebAction (action) {
  *
  * @param {Request} req the http request
  * @param {Response} res the http response
+ * @param {object} actionConfig the action configuration
  * @returns {void}
  */
-async function serveNonWebAction (req, res) {
+async function serveNonWebActionOrSequence (req, res, actionConfig) {
   const url = req.params[0]
-  const [, actionName] = url.split('/')
-  const logger = coreLogger(`serveNonWebAction ${actionName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
+  const [packageName, actionName, ...restofPath] = url.split('/')
+  const logger = coreLogger(`serveNonWebActionOrSequence ${actionName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
+  const owPath = restofPath.join('/')
 
-  return httpStatusResponse({ statusCode: 401, res, logger })
+  const actionRequestContext = {
+    packageName,
+    actionName,
+    owPath,
+    actionConfig
+  }
+
+  // could be a sequence
+  const sequence = actionConfig[packageName]?.sequences?.[actionName]
+  if (sequence) {
+    await invokeSequence({ req, res, sequence, actionConfig, actionRequestContext, logger })
+  } else {
+    const actionResponse = { statusCode: 401 }
+    httpStatusResponse({ actionResponse, res, logger })
+  }
 }
 
 /**
@@ -275,17 +299,30 @@ async function invokeSequence ({ req, res, sequence, actionRequestContext, logge
   }
   params.__ow_headers['x-forwarded-for'] = '127.0.0.1'
   logger.debug('params = ', params)
-  logger.debug('this is a sequence')
+  logger.info('actions to call', sequence?.actions)
+
   // for each action in sequence, serveAction
+  let lastActionResponse = null
   for (let i = 0; i < actions.length; i++) {
     const actionName = actions[i].trim()
     const action = actionRequestContext.actionConfig?.[actionRequestContext.packageName]?.actions[actionName]
     const context = { action, actionName, owPath: actionRequestContext.owPath }
     if (action) {
-      await invokeAction({ req, res, actionRequestContext: context, logger })
+      logger.info('calling action', actionName)
+      // TODO: pass last action response to the next action
+      lastActionResponse = await invokeAction({ req, actionRequestContext: context, logger })
+      logger.debug('action response for', actionName, JSON.stringify(lastActionResponse, null, 2))
+      // TODO: do we short circuit the actions if the status code is an error?
     } else {
-      return httpStatusResponse({ statusCode: 404, statusMessage: `${actionName} in sequence not found`, res, logger })
+      lastActionResponse = { statusCode: 404, statusMessage: `${actionName} in sequence not found` }
+      break
     }
+  }
+
+  if (lastActionResponse) {
+    logger.info('end of sequence')
+    logger.debug('action response for sequence', JSON.stringify(lastActionResponse, null, 2))
+    httpStatusResponse({ actionResponse: lastActionResponse, res, logger })
   }
 }
 
@@ -294,17 +331,18 @@ async function invokeSequence ({ req, res, sequence, actionRequestContext, logge
  *
  * @param {object} params the parameters
  * @param {Request} params.req the http request object
- * @param {Response} params.res the http response object
  * @param {ActionRequestContext} params.actionRequestContext the ActionRequestContext object
  * @param {object} params.logger the logger object
- * @returns {Response} the http response object
+ * @returns {ActionResponse} the action response
  */
-async function invokeAction ({ req, res, actionRequestContext, logger }) {
+async function invokeAction ({ req, actionRequestContext, logger }) {
   // check if action is protected
   if (actionRequestContext.action?.annotations?.['require-adobe-auth']) {
     // check if user is authenticated
     if (!req.headers?.authorization) {
-      return httpStatusResponse({ statusCode: 401, res, logger })
+      return {
+        statusCode: 401
+      }
     }
   }
   // todo: what can we learn from action.annotations?
@@ -336,24 +374,28 @@ async function invokeAction ({ req, res, actionRequestContext, logger }) {
       const headers = response?.headers
       const statusCode = (response?.error?.statusCode ?? response?.statusCode) || 200
 
-      logger.info(`${statusCode} ${statusCodeMessage(statusCode)}`)
-
-      return res
-        .set(headers || {})
-        .status(statusCode)
-        .send(response?.error?.body ?? response?.body)
+      return {
+        headers: headers || {},
+        statusCode,
+        body: response?.error?.body ?? response?.body
+      }
     } catch (e) {
       const statusCode = 500
-      logger.error(`${statusCode} ${statusCodeMessage(statusCode)}`)
       logger.error(e) // log the stacktrace
 
-      return res
-        .status(statusCode)
-        .send({ error: e.message }) // only send the message, not the stacktrace
+      return {
+        statusCode,
+        body: { error: e.message }
+      }
     }
   } else {
+    const statusCode = 401
     const statusMessage = `${actionRequestContext.actionName} action not found, or does not export main`
-    return httpStatusResponse({ statusCode: 401, statusMessage, res, logger })
+
+    return {
+      statusCode,
+      statusMessage
+    }
   }
 }
 
@@ -361,17 +403,22 @@ async function invokeAction ({ req, res, actionRequestContext, logger }) {
  * Sends a http status response according to the parameters.
  *
  * @param {object} params the parameters
- * @param {number} params.statusCode the status code
- * @param {string} [params.statusMessage] the status message
+ * @param {ActionResponse} params.actionResponse the actionResponse
  * @param {Response} params.res the http response object
  * @param {object} params.logger the logger object
  * @returns {Response} the response
  */
-function httpStatusResponse ({ statusCode, statusMessage = statusCodeMessage(statusCode), res, logger }) {
+function httpStatusResponse ({ actionResponse, res, logger }) {
+  const { statusCode, statusMessage = statusCodeMessage(statusCode), headers, body } = actionResponse
   const isError = statusCode >= 400
 
   if (isError) {
     logger.error(`${statusCode} ${statusMessage}`)
+
+    if (headers) {
+      res.set(headers)
+    }
+
     return res
       .status(statusCode)
       .send({ error: statusMessage })
@@ -379,7 +426,7 @@ function httpStatusResponse ({ statusCode, statusMessage = statusCodeMessage(sta
     logger.info(`${statusCode} ${statusMessage}`)
     return res
       .status(statusCode)
-      .send()
+      .send(body)
   }
 }
 
@@ -409,27 +456,26 @@ async function serveWebAction (req, res, actionConfig) {
 
   if (action) {
     if (!isWebAction(action)) {
-      return httpStatusResponse({ statusCode: 404, res, logger: actionLogger })
+      const actionResponse = { statusCode: 404 }
+      httpStatusResponse({ actionResponse, res, logger: actionLogger })
     }
     if (isRawWebAction(action)) {
       actionLogger.warn('raw web action handling is not implemented yet')
     }
 
-    await invokeAction({ req, res, actionRequestContext, logger: actionLogger })
-  } else { // could be a sequence
-    const sequence = actionConfig[packageName]?.sequences?.[actionName]
-    if (sequence) {
-      await invokeSequence({ req, res, sequence, actionConfig, actionRequestContext, logger: actionLogger })
-    } else {
-      return httpStatusResponse({ statusCode: 404, res, logger: actionLogger })
-    }
+    const actionResponse = await invokeAction({ req, actionRequestContext, logger: actionLogger })
+    actionLogger.debug('action response for', actionName, JSON.stringify(actionResponse, null, 2))
+    httpStatusResponse({ actionResponse, res, logger: actionLogger })
+  } else {
+    const actionResponse = { statusCode: 404 }
+    httpStatusResponse({ actionResponse, res, logger: actionLogger })
   }
 }
 
 module.exports = {
   runDev,
   serveWebAction,
-  serveNonWebAction,
+  serveNonWebActionOrSequence,
   httpStatusResponse,
   invokeAction,
   invokeSequence,
