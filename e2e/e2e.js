@@ -10,13 +10,13 @@ governing permissions and limitations under the License.
 */
 
 const execa = require('execa')
-const chalk = require('chalk')
 const { stdout } = require('stdout-stderr')
 const fs = require('fs-extra')
 const path = require('node:path')
 const { createFetch } = require('@adobe/aio-lib-core-networking')
 const fetch = createFetch()
 const https = require('node:https')
+const { DEV_API_PREFIX, DEV_API_WEB_PREFIX } = require('../src/lib/constants')
 
 jest.unmock('execa')
 jest.setTimeout(30000)
@@ -70,23 +70,31 @@ beforeAll(async () => {
 test('boilerplate help test', async () => {
   const packagejson = JSON.parse(fs.readFileSync('package.json').toString())
   const name = `${packagejson.name}`
-  console.log(`> e2e tests for ${chalk.bold(name)}`)
+  console.log(`> e2e tests for ${name}`)
 
   console.log('    - boilerplate help ..')
   expect(() => { execa.sync('./bin/run', ['--help'], { stdio: 'inherit' }) }).not.toThrow()
 
-  console.log(`    - done for ${chalk.bold(name)}`)
+  console.log(`    - done for ${name}`)
 })
 
 describe('test-project http api tests', () => {
-  const port = 9080
+  const HOST = 'localhost'
+  const PORT = 9080
+  const PACKAGE_NAME = 'dx-excshell-1'
+
   let serverProcess
 
+  const createApiUrl = ({ scheme = 'https', isWeb = true, packageName = PACKAGE_NAME, actionName }) => {
+    const prefix = isWeb ? DEV_API_WEB_PREFIX : DEV_API_PREFIX
+    return `${scheme}://${HOST}:${PORT}/${prefix}/${packageName}/${actionName}`
+  }
+
   beforeAll(async () => {
-    serverProcess = startServer({ e2eProject: 'test-project', port })
+    serverProcess = startServer({ e2eProject: 'test-project', PORT })
     const timeoutMs = 10000
     await waitForServerReady({
-      host: `https://localhost:${port}`,
+      host: `https://localhost:${PORT}`,
       startTime: Date.now(),
       period: 1000,
       timeout: timeoutMs
@@ -94,13 +102,13 @@ describe('test-project http api tests', () => {
   })
 
   afterAll(() => {
-    console.log(`killed server at port ${port}:`, serverProcess.kill('SIGTERM', {
+    console.log(`killed server at port ${PORT}:`, serverProcess.kill('SIGTERM', {
       forceKillAfterTimeout: 2000
     }))
   })
 
   test('front end is available (200)', async () => {
-    const url = `https://localhost:${port}/index.html`
+    const url = `https://${HOST}:${PORT}/index.html`
 
     const response = await fetch(url, { agent: httpsAgent })
     expect(response.ok).toBeTruthy()
@@ -108,7 +116,7 @@ describe('test-project http api tests', () => {
   })
 
   test('web action requires adobe auth, *no* auth provided (401)', async () => {
-    const url = `https://localhost:${port}/api/v1/web/dx-excshell-1/requireAdobeAuth`
+    const url = createApiUrl({ actionName: 'requireAdobeAuth' })
 
     const response = await fetch(url, { agent: httpsAgent })
     expect(response.ok).toBeFalsy()
@@ -116,7 +124,7 @@ describe('test-project http api tests', () => {
   })
 
   test('web action requires adobe auth, auth is provided (200)', async () => {
-    const url = `https://localhost:${port}/api/v1/web/dx-excshell-1/requireAdobeAuth`
+    const url = createApiUrl({ actionName: 'requireAdobeAuth' })
 
     const response = await fetch(url, {
       agent: httpsAgent,
@@ -131,15 +139,15 @@ describe('test-project http api tests', () => {
   test('web actions (no adobe auth) (200)', async () => {
     // 1. action sends response object
     {
-      const url = `https://localhost:${port}/api/v1/web/dx-excshell-1/noAdobeAuth`
+      const url = createApiUrl({ actionName: 'noAdobeAuth' })
 
       const response = await fetch(url, { agent: httpsAgent })
       expect(response.ok).toBeTruthy()
       expect(response.status).toEqual(200)
     }
-    // 1. action *does not* send response object
+    // 2. action *does not* send response object
     {
-      const url = `https://localhost:${port}/api/v1/web/dx-excshell-1/noResponseObject`
+      const url = createApiUrl({ actionName: 'noResponseObject' })
 
       const response = await fetch(url, { agent: httpsAgent })
       expect(response.ok).toBeTruthy()
@@ -148,7 +156,7 @@ describe('test-project http api tests', () => {
   })
 
   test('web action is not found (404)', async () => {
-    const url = `https://localhost:${port}/api/v1/web/dx-excshell-1/SomeActionThatDoesNotExist`
+    const url = createApiUrl({ actionName: 'SomeActionThatDoesNotExist' })
 
     const response = await fetch(url, { agent: httpsAgent })
     expect(response.ok).toBeFalsy()
@@ -156,7 +164,7 @@ describe('test-project http api tests', () => {
   })
 
   test('web action throws an exception (500)', async () => {
-    const url = `https://localhost:${port}/api/v1/web/dx-excshell-1/throwsError`
+    const url = createApiUrl({ actionName: 'throwsError' })
 
     const response = await fetch(url, { agent: httpsAgent })
     expect(response.ok).toBeFalsy()
@@ -164,7 +172,7 @@ describe('test-project http api tests', () => {
   })
 
   test('web action does not have a main function export (401)', async () => {
-    const url = `https://localhost:${port}/api/v1/web/dx-excshell-1/noMainExport`
+    const url = createApiUrl({ actionName: 'noMainExport' })
 
     const response = await fetch(url, { agent: httpsAgent })
     expect(response.ok).toBeFalsy()
@@ -176,16 +184,15 @@ describe('test-project http api tests', () => {
 
     // 1. non-web action exists
     {
-      const url = `https://localhost:${port}/api/v1/dx-excshell-1/actionIsNonWeb`
+      const url = createApiUrl({ isWeb: false, actionName: 'actionIsNonWeb' })
 
       const response = await fetch(url, { agent: httpsAgent })
       expect(response.ok).toBeFalsy()
       expect(response.status).toEqual(expectedStatusCode)
     }
-
     // 2. non-web action not found
     {
-      const url = `https://localhost:${port}/api/v1/dx-excshell-1/SomeActionThatDoesNotExist`
+      const url = createApiUrl({ isWeb: false, actionName: 'SomeActionThatDoesNotExist' })
 
       const response = await fetch(url, { agent: httpsAgent })
       expect(response.ok).toBeFalsy()
@@ -194,7 +201,7 @@ describe('test-project http api tests', () => {
   })
 
   test('sequence with all actions available (200)', async () => {
-    const url = `https://localhost:${port}/api/v1/dx-excshell-1/sequenceWithAllActionsAvailable`
+    const url = createApiUrl({ isWeb: false, actionName: 'sequenceWithAllActionsAvailable' })
 
     const response = await fetch(url, { agent: httpsAgent })
     expect(response.ok).toBeTruthy()
@@ -202,7 +209,7 @@ describe('test-project http api tests', () => {
   })
 
   test('sequence with missing action (404)', async () => {
-    const url = `https://localhost:${port}/api/v1/dx-excshell-1/sequenceWithMissingAction`
+    const url = createApiUrl({ isWeb: false, actionName: 'sequenceWithMissingAction' })
 
     const response = await fetch(url, { agent: httpsAgent })
     expect(response.ok).toBeFalsy()
