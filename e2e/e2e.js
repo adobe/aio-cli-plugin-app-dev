@@ -238,6 +238,29 @@ describe('test-project http api tests', () => {
     })
   })
 
+  test('web sequence with a payload and expected result (200)', async () => {
+    // 1. add 1,2,3,4 = 10, then 10^2 = 100
+    {
+      const url = createApiUrl({ actionName: 'addNumbersThenSquareIt?payload=1,2,3,4' })
+      const response = await fetch(url, {
+        agent: httpsAgent
+      })
+      expect(response.ok).toBeTruthy()
+      expect(response.status).toEqual(200)
+      expect(await response.json()).toEqual({ payload: 100 })
+    }
+    // 2. add 9,5,2,7 = 23, then 23^2 = 529
+    {
+      const url = createApiUrl({ actionName: 'addNumbersThenSquareIt?payload=9,5,2,7' })
+      const response = await fetch(url, {
+        agent: httpsAgent
+      })
+      expect(response.ok).toBeTruthy()
+      expect(response.status).toEqual(200)
+      expect(await response.json()).toEqual({ payload: 529 })
+    }
+  })
+
   test('non-web sequence called via /api/v1/web (404)', async () => {
     const expectedStatusCode = 404
 
