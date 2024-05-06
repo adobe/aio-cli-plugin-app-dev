@@ -30,10 +30,10 @@ const { SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_P
 
 /**
  * @typedef {object} ActionRequestContext
- * @property {object} action the action object
+ * @property {object} contextItem the action or sequence object
+ * @property {string} contextItemName the action or sequence name
+ * @property {object} contextItemParams the action or sequence params
  * @property {string} packageName the package name
- * @property {string} actionName the action name
- * @property {string} owPath the rest of the request path
  * @property {object} actionConfig the whole action config
  */
 
@@ -47,7 +47,6 @@ const { SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_P
  * @typedef {object} ActionResponse
  * @property {object} headers the response headers
  * @property {object} statusCode the HTTP status code
- * @property {object} statusMessage the HTTP status message
  * @property {object} body the response body
  */
 
@@ -256,7 +255,7 @@ async function serveNonWebAction (req, res, actionConfig) {
   const [, actionName] = url.split('/')
   const logger = coreLogger(`serveNonWebAction ${actionName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
 
-  const actionResponse = { statusCode: 401, statusMessage: 'The resource requires authentication, which was not supplied with the request' }
+  const actionResponse = { statusCode: 401, body: { error: 'The resource requires authentication, which was not supplied with the request' } }
   return httpStatusResponse({ actionResponse, res, logger })
 }
 
@@ -264,38 +263,35 @@ async function serveNonWebAction (req, res, actionConfig) {
  * Invoke a sequence.
  *
  * @param {object} params the parameters
- * @param {object} params.req the http request object
- * @param {object} params.sequence the sequence object
  * @param {ActionRequestContext} params.actionRequestContext the ActionRequestContext object
  * @param {object} params.logger the logger object
- * @returns {void}
+ * @returns {ActionResponse} the action response object
  */
-async function invokeSequence ({ req, sequence, actionRequestContext, logger }) {
+async function invokeSequence ({ actionRequestContext, logger }) {
+  const { contextItem: sequence, contextItemParams: sequenceParams, actionConfig, packageName } = actionRequestContext
   const actions = sequence?.actions?.split(',') ?? []
-  const params = {
-    __ow_body: req.body,
-    __ow_headers: req.headers,
-    __ow_path: actionRequestContext.owPath,
-    __ow_query: req.query,
-    __ow_method: req.method.toLowerCase(),
-    ...req.query,
-    ...actionRequestContext.action?.inputs,
-    ...(req.is('application/json') ? req.body : {})
-  }
-  params.__ow_headers['x-forwarded-for'] = '127.0.0.1'
-  logger.debug('params = ', params)
   logger.info('actions to call', sequence?.actions)
 
-  // for each action in sequence, serveAction
+  // for the first action, we pass in the sequence params
+  // subsequent actions get the last action's response as params (plus select params)
   let lastActionResponse = null
+
   for (let i = 0; i < actions.length; i++) {
     const actionName = actions[i].trim()
-    const action = actionRequestContext.actionConfig?.[actionRequestContext.packageName]?.actions[actionName]
-    const context = { action, actionName, owPath: actionRequestContext.owPath }
+    const action = actionConfig?.[packageName]?.actions[actionName]
+    const actionParams = (i === 0)
+      ? sequenceParams
+      : {
+          __ow_headers: sequenceParams.__ow_headers,
+          __ow_method: sequenceParams.__ow_method,
+          ...action?.inputs,
+          ...(isObjectNotArray(lastActionResponse.body) ? lastActionResponse.body : {})
+        }
+
+    const context = { contextItem: action, actionName, contextItemParams: actionParams }
     if (action) {
       logger.info('calling action', actionName)
-      // TODO: pass last action response to the next action
-      lastActionResponse = await invokeAction({ req, actionRequestContext: context, logger })
+      lastActionResponse = await invokeAction({ actionRequestContext: context, logger })
       const isError = lastActionResponse.statusCode >= 400
       logger.debug('action response for', actionName, JSON.stringify(lastActionResponse, null, 2))
       // we short circuit the actions if the status code is an error
@@ -304,73 +300,79 @@ async function invokeSequence ({ req, sequence, actionRequestContext, logger }) 
       }
     } else {
       logger.error(`Sequence component ${actionName} does not exist.`)
-      lastActionResponse = { statusCode: 400, statusMessage: 'Sequence component does not exist.' }
+      lastActionResponse = { statusCode: 400, body: { error: 'Sequence component does not exist.' } }
       break
     }
   }
-  return lastActionResponse
+
+  return {
+    statusCode: 200,
+    ...lastActionResponse
+  }
 }
 
 /**
  * Invoke an action.
  *
  * @param {object} params the parameters
- * @param {Request} params.req the http request object
  * @param {ActionRequestContext} params.actionRequestContext the ActionRequestContext object
  * @param {object} params.logger the logger object
  * @returns {ActionResponse} the action response
  */
-async function invokeAction ({ req, actionRequestContext, logger }) {
+async function invokeAction ({ actionRequestContext, logger }) {
+  const { contextItem: action, contextItemName: actionName, contextItemParams: params } = actionRequestContext
+
   // check if action is protected
-  if (actionRequestContext.action?.annotations?.['require-adobe-auth']) { // TODO: check possible values for annotation
+  if (action?.annotations?.['require-adobe-auth']) {
     // check if user is authenticated
-    if (!req.headers?.authorization) {
+    if (!params.__ow_headers?.authorization) {
       return {
         statusCode: 401,
-        statusMessage: 'cannot authorize request, reason: missing authorization header'
+        body: { error: 'cannot authorize request, reason: missing authorization header' }
       }
     }
   }
-  // todo: what can we learn from action.annotations?
-  // todo: action.include?
-  // todo: rules, triggers, ...
   // generate an activationID just like openwhisk
   process.env.__OW_ACTIVATION_ID = crypto.randomBytes(16).toString('hex')
-  delete require.cache[actionRequestContext.action.function]
-  const actionFunction = require(actionRequestContext.action.function)?.main
-
-  const params = {
-    __ow_body: req.body,
-    __ow_headers: req.headers,
-    __ow_path: actionRequestContext.owPath,
-    __ow_query: req.query,
-    __ow_method: req.method.toLowerCase(),
-    ...req.query,
-    ...actionRequestContext.action.inputs,
-    ...(req.is('application/json') ? req.body : {})
-  }
-  params.__ow_headers['x-forwarded-for'] = '127.0.0.1'
-  logger.debug('params = ', params)
+  delete require.cache[action.function]
+  const actionFunction = require(action.function)?.main
 
   if (actionFunction) {
     try {
-      process.env.__OW_ACTION_NAME = actionRequestContext.actionName
+      process.env.__OW_ACTION_NAME = actionName
       const response = await actionFunction(params)
       delete process.env.__OW_ACTION_NAME
 
-      let statusCode, headers
+      let statusCode, headers, body
 
       if (response) {
-        headers = response?.headers
-        statusCode = (response?.error?.statusCode ?? response?.statusCode) || 200
-      } else {
+        headers = response.headers
+        /* short-circuit: if there is an error property in the dictionary, then we only return the error contents
+           e.g.
+              {
+                error: {
+                  statusCode: 400,
+                  body: {
+                    error: 'some error message'
+                  }
+                }
+              }
+        */
+        if (response.error) {
+          statusCode = response.error.statusCode
+          body = response.error.body
+        } else {
+          statusCode = response.statusCode || 200
+          body = response.body
+        }
+      } else { // no response data
         statusCode = 204
       }
 
       return {
         headers: headers || {},
         statusCode,
-        body: response?.error?.body ?? response?.body
+        body
       }
     } catch (e) {
       const statusCode = 400
@@ -378,17 +380,17 @@ async function invokeAction ({ req, actionRequestContext, logger }) {
 
       return {
         statusCode,
-        statusMessage: 'Response is not valid \'message/http\'.'
+        body: { error: 'Response is not valid \'message/http\'.' }
       }
     }
   } else {
     const statusCode = 400
-    logger.error(`${actionRequestContext.actionName} action not found, or does not export main`)
-    const statusMessage = 'Response is not valid \'message/http\'.'
+    logger.error(`${actionName} action not found, or does not export main`)
+    const body = { error: 'Response is not valid \'message/http\'.' }
 
     return {
       statusCode,
-      statusMessage
+      body
     }
   }
 }
@@ -403,81 +405,121 @@ async function invokeAction ({ req, actionRequestContext, logger }) {
  * @returns {Response} the response
  */
 function httpStatusResponse ({ actionResponse, res, logger }) {
-  const { statusCode, statusMessage = statusCodeMessage(statusCode), headers, body } = actionResponse
+  const { statusCode, headers, body } = actionResponse
   const isError = statusCode >= 400
+  const logMessage = `${statusCode} ${statusCodeMessage(statusCode)}`
 
   if (isError) {
-    logger.error(`${statusCode} ${statusMessage}`)
-
-    if (headers) {
-      res.set(headers)
-    }
-
-    return res
-      .status(statusCode)
-      .send({ error: statusMessage })
+    logger.error(logMessage)
   } else {
-    logger.info(`${statusCode} ${statusMessage}`)
-    return res
-      .status(statusCode)
-      .send(body)
+    logger.info(logMessage)
   }
+
+  if (headers) {
+    res.set(headers)
+  }
+
+  return res
+    .status(statusCode)
+    .send(body)
 }
 
 /**
  * Express path handler to handle web action API calls.
  *
- * @param {*} req the http request
- * @param {*} res the http response
- * @param {*} actionConfig the action configuration
+ * @param {Request} req the http request
+ * @param {Response} res the http response
+ * @param {object} actionConfig the action configuration
  * @returns {Response} the response
  */
 async function serveWebAction (req, res, actionConfig) {
   const url = req.params[0]
-  const [packageName, actionName, ...restofPath] = url.split('/')
-  const action = actionConfig[packageName]?.actions[actionName]
-  const sequence = actionConfig[packageName]?.sequences?.[actionName]
+  const [packageName, contextItemName, ...restofPath] = url.split('/')
+  const action = actionConfig[packageName]?.actions[contextItemName]
+  const sequence = actionConfig[packageName]?.sequences?.[contextItemName]
   const owPath = restofPath.join('/')
 
+  const actionLogger = coreLogger(`serveWebAction ${contextItemName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
+
+  const contextItemParams = createActionParametersFromRequest({ req, actionInputs: action?.inputs })
+  contextItemParams.__ow_path = owPath
+
+  actionLogger.debug('contextItemParams =', contextItemParams)
+
   const actionRequestContext = {
-    action,
     packageName,
-    actionName,
-    owPath,
+    contextItemName,
+    contextItemParams,
     actionConfig
   }
 
-  const actionLogger = coreLogger(`serveWebAction ${actionName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
+  let invoker, contextItem
 
-  if (action) {
-    if (!isWebAction(action)) {
-      const actionResponse = { statusCode: 404, statusMessage: 'The requested resource does not exist.' }
+  // NOTE:
+  // Currently aio-cli deploying to Adobe Runtime allows you to deploy web sequences and web actions with the same name.
+  // The url that is generated for both are the *same*, but the action implementation is lost, since the sequence deploy will supercede it.
+  // We reflect the bug behavior here unless the implementation changes in the future.
+  // See https://github.com/adobe/aio-cli/issues/614
+  if (sequence) {
+    invoker = invokeSequence
+    contextItem = sequence
+  } else if (action) {
+    invoker = invokeAction
+    contextItem = action
+  } else {
+    invoker = null
+  }
+
+  if (invoker) {
+    if (!isWebAction(contextItem)) {
+      const actionResponse = { statusCode: 404, body: { error: 'The requested resource does not exist.' } }
       return httpStatusResponse({ actionResponse, res, logger: actionLogger })
     }
-    if (isRawWebAction(action)) {
-      actionLogger.warn('raw web action handling is not implemented yet')
+    if (isRawWebAction(contextItem)) {
+      actionLogger.warn('raw handling is not implemented yet')
     }
 
-    const actionResponse = await invokeAction({ req, actionRequestContext, logger: actionLogger })
-    actionLogger.debug('action response for', actionName, JSON.stringify(actionResponse, null, 2))
-    httpStatusResponse({ actionResponse, res, logger: actionLogger })
-  } else if (sequence) {
-    if (!isWebAction(sequence)) {
-      const actionResponse = { statusCode: 404, statusMessage: 'The requested resource does not exist.' }
-      return httpStatusResponse({ actionResponse, res, logger: actionLogger })
-    }
-    if (isRawWebAction(sequence)) {
-      actionLogger.warn('raw web action handling is not implemented yet')
-    }
-
-    const actionResponse = await invokeSequence({ req, sequence, actionConfig, actionRequestContext, logger: actionLogger })
-    actionLogger.info('end of sequence')
-    actionLogger.debug('action response for', actionName, JSON.stringify(actionResponse, null, 2))
+    actionRequestContext.contextItem = contextItem
+    const actionResponse = await invoker({ actionRequestContext, logger: actionLogger })
+    actionLogger.debug('response for', contextItemName, JSON.stringify(actionResponse, null, 2))
     return httpStatusResponse({ actionResponse, res, logger: actionLogger })
   } else {
-    const actionResponse = { statusCode: 404, statusMessage: 'The requested resource does not exist.' }
+    const actionResponse = { statusCode: 404, body: { error: 'The requested resource does not exist.' } }
     return httpStatusResponse({ actionResponse, res, logger: actionLogger })
   }
+}
+
+/**
+ * Create action parameters.
+ *
+ * @param {object} param the parameters
+ * @param {Request} param.req the request object
+ * @param {object} param.actionInputs the action inputs
+ * @returns {object} the action parameters
+ */
+function createActionParametersFromRequest ({ req, actionInputs = {} }) {
+  return {
+    __ow_body: req.body,
+    __ow_headers: {
+      ...req.headers,
+      'x-forwarded-for': '127.0.0.1'
+    },
+    __ow_query: req.query,
+    __ow_method: req.method.toLowerCase(),
+    ...req.query,
+    ...actionInputs,
+    ...(req.is('application/json') ? req.body : {})
+  }
+}
+
+/**
+ * Returns true if the item is an object (but not an Array)
+ *
+ * @param {*} item the item to test
+ * @returns {boolean} true if the item is an object (but not an Array)
+ */
+function isObjectNotArray (item) {
+  return typeof item === 'object' && !Array.isArray(item)
 }
 
 module.exports = {
@@ -489,5 +531,7 @@ module.exports = {
   invokeSequence,
   statusCodeMessage,
   isRawWebAction,
-  isWebAction
+  isWebAction,
+  createActionParametersFromRequest,
+  isObjectNotArray
 }
