@@ -174,7 +174,7 @@ async function runDev (runOptions, config, _inprocHookRunner) {
 
   // serveAction needs to clear cache for each request, so we get live changes
   app.all(`/${DEV_API_WEB_PREFIX}/*`, (req, res) => serveWebAction(req, res, actionConfig))
-  app.all(`/${DEV_API_PREFIX}/*`, (req, res) => serveNonWebActionOrSequence(req, res, actionConfig))
+  app.all(`/${DEV_API_PREFIX}/*`, (req, res) => serveNonWebAction(req, res, actionConfig))
 
   const server = https.createServer(serverOptions, app)
   server.listen(serverPort, () => {
@@ -243,35 +243,21 @@ function isRawWebAction (action) {
 }
 
 /**
- * Express path handler to handle non-web action API calls.
- * Openwhisk returns 401 when you call a non-web action via HTTP GET.
+ * Express path handler to handle non-web action or non-web sequence API calls.
+ * Openwhisk returns 401 when you call a non-web action or non-web sequence via HTTP.
  *
  * @param {Request} req the http request
  * @param {Response} res the http response
  * @param {object} actionConfig the action configuration
  * @returns {void}
  */
-async function serveNonWebActionOrSequence (req, res, actionConfig) {
+async function serveNonWebAction (req, res, actionConfig) {
   const url = req.params[0]
-  const [packageName, actionName, ...restofPath] = url.split('/')
-  const logger = coreLogger(`serveNonWebActionOrSequence ${actionName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
-  const owPath = restofPath.join('/')
+  const [, actionName] = url.split('/')
+  const logger = coreLogger(`serveNonWebAction ${actionName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
 
-  const actionRequestContext = {
-    packageName,
-    actionName,
-    owPath,
-    actionConfig
-  }
-
-  // could be a sequence
-  const sequence = actionConfig[packageName]?.sequences?.[actionName]
-  if (sequence) {
-    await invokeSequence({ req, res, sequence, actionConfig, actionRequestContext, logger })
-  } else {
-    const actionResponse = { statusCode: 401 }
-    httpStatusResponse({ actionResponse, res, logger })
-  }
+  const actionResponse = { statusCode: 401, statusMessage: 'The resource requires authentication, which was not supplied with the request' }
+  return httpStatusResponse({ actionResponse, res, logger })
 }
 
 /**
@@ -279,13 +265,12 @@ async function serveNonWebActionOrSequence (req, res, actionConfig) {
  *
  * @param {object} params the parameters
  * @param {object} params.req the http request object
- * @param {object} params.res the http response object
  * @param {object} params.sequence the sequence object
  * @param {ActionRequestContext} params.actionRequestContext the ActionRequestContext object
  * @param {object} params.logger the logger object
  * @returns {void}
  */
-async function invokeSequence ({ req, res, sequence, actionRequestContext, logger }) {
+async function invokeSequence ({ req, sequence, actionRequestContext, logger }) {
   const actions = sequence?.actions?.split(',') ?? []
   const params = {
     __ow_body: req.body,
@@ -318,16 +303,12 @@ async function invokeSequence ({ req, res, sequence, actionRequestContext, logge
         break
       }
     } else {
-      lastActionResponse = { statusCode: 404, statusMessage: `${actionName} in sequence not found` }
+      logger.error(`Sequence component ${actionName} does not exist.`)
+      lastActionResponse = { statusCode: 400, statusMessage: 'Sequence component does not exist.' }
       break
     }
   }
-
-  if (lastActionResponse) {
-    logger.info('end of sequence')
-    logger.debug('action response for sequence', JSON.stringify(lastActionResponse, null, 2))
-    httpStatusResponse({ actionResponse: lastActionResponse, res, logger })
-  }
+  return lastActionResponse
 }
 
 /**
@@ -341,11 +322,12 @@ async function invokeSequence ({ req, res, sequence, actionRequestContext, logge
  */
 async function invokeAction ({ req, actionRequestContext, logger }) {
   // check if action is protected
-  if (actionRequestContext.action?.annotations?.['require-adobe-auth']) {
+  if (actionRequestContext.action?.annotations?.['require-adobe-auth']) { // TODO: check possible values for annotation
     // check if user is authenticated
     if (!req.headers?.authorization) {
       return {
-        statusCode: 401
+        statusCode: 401,
+        statusMessage: 'cannot authorize request, reason: missing authorization header'
       }
     }
   }
@@ -375,8 +357,15 @@ async function invokeAction ({ req, actionRequestContext, logger }) {
       process.env.__OW_ACTION_NAME = actionRequestContext.actionName
       const response = await actionFunction(params)
       delete process.env.__OW_ACTION_NAME
-      const headers = response?.headers
-      const statusCode = (response?.error?.statusCode ?? response?.statusCode) || 200
+
+      let statusCode, headers
+
+      if (response) {
+        headers = response?.headers
+        statusCode = (response?.error?.statusCode ?? response?.statusCode) || 200
+      } else {
+        statusCode = 204
+      }
 
       return {
         headers: headers || {},
@@ -384,17 +373,18 @@ async function invokeAction ({ req, actionRequestContext, logger }) {
         body: response?.error?.body ?? response?.body
       }
     } catch (e) {
-      const statusCode = 500
+      const statusCode = 400
       logger.error(e) // log the stacktrace
 
       return {
         statusCode,
-        body: { error: e.message }
+        statusMessage: 'Response is not valid \'message/http\'.'
       }
     }
   } else {
-    const statusCode = 401
-    const statusMessage = `${actionRequestContext.actionName} action not found, or does not export main`
+    const statusCode = 400
+    logger.error(`${actionRequestContext.actionName} action not found, or does not export main`)
+    const statusMessage = 'Response is not valid \'message/http\'.'
 
     return {
       statusCode,
@@ -446,6 +436,7 @@ async function serveWebAction (req, res, actionConfig) {
   const url = req.params[0]
   const [packageName, actionName, ...restofPath] = url.split('/')
   const action = actionConfig[packageName]?.actions[actionName]
+  const sequence = actionConfig[packageName]?.sequences?.[actionName]
   const owPath = restofPath.join('/')
 
   const actionRequestContext = {
@@ -460,8 +451,8 @@ async function serveWebAction (req, res, actionConfig) {
 
   if (action) {
     if (!isWebAction(action)) {
-      const actionResponse = { statusCode: 404 }
-      httpStatusResponse({ actionResponse, res, logger: actionLogger })
+      const actionResponse = { statusCode: 404, statusMessage: 'The requested resource does not exist.' }
+      return httpStatusResponse({ actionResponse, res, logger: actionLogger })
     }
     if (isRawWebAction(action)) {
       actionLogger.warn('raw web action handling is not implemented yet')
@@ -470,16 +461,29 @@ async function serveWebAction (req, res, actionConfig) {
     const actionResponse = await invokeAction({ req, actionRequestContext, logger: actionLogger })
     actionLogger.debug('action response for', actionName, JSON.stringify(actionResponse, null, 2))
     httpStatusResponse({ actionResponse, res, logger: actionLogger })
+  } else if (sequence) {
+    if (!isWebAction(sequence)) {
+      const actionResponse = { statusCode: 404, statusMessage: 'The requested resource does not exist.' }
+      return httpStatusResponse({ actionResponse, res, logger: actionLogger })
+    }
+    if (isRawWebAction(sequence)) {
+      actionLogger.warn('raw web action handling is not implemented yet')
+    }
+
+    const actionResponse = await invokeSequence({ req, sequence, actionConfig, actionRequestContext, logger: actionLogger })
+    actionLogger.info('end of sequence')
+    actionLogger.debug('action response for', actionName, JSON.stringify(actionResponse, null, 2))
+    return httpStatusResponse({ actionResponse, res, logger: actionLogger })
   } else {
-    const actionResponse = { statusCode: 404 }
-    httpStatusResponse({ actionResponse, res, logger: actionLogger })
+    const actionResponse = { statusCode: 404, statusMessage: 'The requested resource does not exist.' }
+    return httpStatusResponse({ actionResponse, res, logger: actionLogger })
   }
 }
 
 module.exports = {
   runDev,
   serveWebAction,
-  serveNonWebActionOrSequence,
+  serveNonWebAction,
   httpStatusResponse,
   invokeAction,
   invokeSequence,

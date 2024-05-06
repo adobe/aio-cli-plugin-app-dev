@@ -79,22 +79,24 @@ test('boilerplate help test', async () => {
 })
 
 describe('test-project http api tests', () => {
+  const SCHEME = 'https'
+  const PROJECT = 'test-project'
   const HOST = 'localhost'
   const PORT = 9080
   const PACKAGE_NAME = 'dx-excshell-1'
 
   let serverProcess
 
-  const createApiUrl = ({ scheme = 'https', isWeb = true, packageName = PACKAGE_NAME, actionName }) => {
+  const createApiUrl = ({ scheme = SCHEME, isWeb = true, packageName = PACKAGE_NAME, actionName }) => {
     const prefix = isWeb ? DEV_API_WEB_PREFIX : DEV_API_PREFIX
     return `${scheme}://${HOST}:${PORT}/${prefix}/${packageName}/${actionName}`
   }
 
   beforeAll(async () => {
-    serverProcess = startServer({ e2eProject: 'test-project', PORT })
+    serverProcess = startServer({ e2eProject: PROJECT, PORT })
     const timeoutMs = 10000
     await waitForServerReady({
-      host: `https://localhost:${PORT}`,
+      host: `${SCHEME}://${HOST}:${PORT}`,
       startTime: Date.now(),
       period: 1000,
       timeout: timeoutMs
@@ -113,6 +115,7 @@ describe('test-project http api tests', () => {
     const response = await fetch(url, { agent: httpsAgent })
     expect(response.ok).toBeTruthy()
     expect(response.status).toEqual(200)
+    expect(await response.text()).toMatch('<html')
   })
 
   test('web action requires adobe auth, *no* auth provided (401)', async () => {
@@ -121,6 +124,9 @@ describe('test-project http api tests', () => {
     const response = await fetch(url, { agent: httpsAgent })
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(401)
+    expect(await response.json()).toEqual({
+      error: 'cannot authorize request, reason: missing authorization header'
+    })
   })
 
   test('web action requires adobe auth, auth is provided (200)', async () => {
@@ -134,9 +140,10 @@ describe('test-project http api tests', () => {
     })
     expect(response.ok).toBeTruthy()
     expect(response.status).toEqual(200)
+    expect(await response.text()).toEqual(expect.any(String))
   })
 
-  test('web actions (no adobe auth) (200)', async () => {
+  test('web actions (no adobe auth) (200/204)', async () => {
     // 1. action sends response object
     {
       const url = createApiUrl({ actionName: 'noAdobeAuth' })
@@ -144,6 +151,7 @@ describe('test-project http api tests', () => {
       const response = await fetch(url, { agent: httpsAgent })
       expect(response.ok).toBeTruthy()
       expect(response.status).toEqual(200)
+      expect(await response.text()).toEqual(expect.any(String))
     }
     // 2. action *does not* send response object
     {
@@ -151,7 +159,8 @@ describe('test-project http api tests', () => {
 
       const response = await fetch(url, { agent: httpsAgent })
       expect(response.ok).toBeTruthy()
-      expect(response.status).toEqual(200)
+      expect(response.status).toEqual(204)
+      expect(await response.text()).toEqual('') // no body
     }
   })
 
@@ -161,22 +170,92 @@ describe('test-project http api tests', () => {
     const response = await fetch(url, { agent: httpsAgent })
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(404)
+    expect(await response.json()).toEqual({
+      error: 'The requested resource does not exist.'
+    })
   })
 
-  test('web action throws an exception (500)', async () => {
+  test('web action throws an exception (400)', async () => {
     const url = createApiUrl({ actionName: 'throwsError' })
 
     const response = await fetch(url, { agent: httpsAgent })
     expect(response.ok).toBeFalsy()
-    expect(response.status).toEqual(500)
+    expect(response.status).toEqual(400)
+    expect(await response.json()).toEqual({
+      error: 'Response is not valid \'message/http\'.'
+    })
   })
 
-  test('web action does not have a main function export (401)', async () => {
+  test('web action does not have a main function export (400)', async () => {
     const url = createApiUrl({ actionName: 'noMainExport' })
 
     const response = await fetch(url, { agent: httpsAgent })
     expect(response.ok).toBeFalsy()
-    expect(response.status).toEqual(401)
+    expect(response.status).toEqual(400)
+    expect(await response.json()).toEqual({
+      error: 'Response is not valid \'message/http\'.'
+    })
+  })
+
+  test('web sequence with all actions available (200)', async () => {
+    const url = createApiUrl({ actionName: 'sequenceWithAllActionsAvailable' })
+
+    const response = await fetch(url, { agent: httpsAgent })
+    expect(response.ok).toBeTruthy()
+    expect(response.status).toEqual(200)
+  })
+
+  test('web sequence with missing action (400)', async () => {
+    const url = createApiUrl({ actionName: 'sequenceWithMissingAction' })
+
+    const response = await fetch(url, { agent: httpsAgent })
+    expect(response.ok).toBeFalsy()
+    expect(response.status).toEqual(400)
+    expect(await response.json()).toEqual({
+      error: 'Sequence component does not exist.'
+    })
+  })
+
+  test('web sequence with an action that throws an error (400)', async () => {
+    const url = createApiUrl({ actionName: 'sequenceWithActionThatThrowsError' })
+
+    const response = await fetch(url, { agent: httpsAgent })
+    expect(response.ok).toBeFalsy()
+    expect(response.status).toEqual(400)
+    expect(await response.json()).toEqual({
+      error: 'Response is not valid \'message/http\'.'
+    })
+  })
+
+  test('web sequence with an action that has no main export (400)', async () => {
+    const url = createApiUrl({ actionName: 'sequenceWithActionThatHasNoMainExport' })
+
+    const response = await fetch(url, { agent: httpsAgent })
+    expect(response.ok).toBeFalsy()
+    expect(response.status).toEqual(400)
+    expect(await response.json()).toEqual({
+      error: 'Response is not valid \'message/http\'.'
+    })
+  })
+
+  test('non-web sequence called via /api/v1/web (404)', async () => {
+    const expectedStatusCode = 404
+
+    const url = createApiUrl({ isWeb: true, actionName: 'nonWebSequence' })
+
+    const response = await fetch(url, { agent: httpsAgent })
+    expect(response.ok).toBeFalsy()
+    expect(response.status).toEqual(expectedStatusCode)
+  })
+
+  test('non-web action called via /api/v1/web (404)', async () => {
+    const expectedStatusCode = 404
+
+    const url = createApiUrl({ isWeb: true, actionName: 'actionIsNonWeb' })
+
+    const response = await fetch(url, { agent: httpsAgent })
+    expect(response.ok).toBeFalsy()
+    expect(response.status).toEqual(expectedStatusCode)
   })
 
   test('non-web actions should always be unauthorized (401)', async () => {
@@ -200,35 +279,24 @@ describe('test-project http api tests', () => {
     }
   })
 
-  test('sequence with all actions available (200)', async () => {
-    const url = createApiUrl({ isWeb: false, actionName: 'sequenceWithAllActionsAvailable' })
+  test('non-web sequences should always be unauthorized (401)', async () => {
+    const expectedStatusCode = 401
 
-    const response = await fetch(url, { agent: httpsAgent })
-    expect(response.ok).toBeTruthy()
-    expect(response.status).toEqual(200)
-  })
+    // 1. non-web sequence exists
+    {
+      const url = createApiUrl({ isWeb: false, actionName: 'nonWebSequence' })
 
-  test('sequence with missing action (404)', async () => {
-    const url = createApiUrl({ isWeb: false, actionName: 'sequenceWithMissingAction' })
+      const response = await fetch(url, { agent: httpsAgent })
+      expect(response.ok).toBeFalsy()
+      expect(response.status).toEqual(expectedStatusCode)
+    }
+    // 2. non-web sequence not found
+    {
+      const url = createApiUrl({ isWeb: false, actionName: 'SomeSequenceThatDoesNotExist' })
 
-    const response = await fetch(url, { agent: httpsAgent })
-    expect(response.ok).toBeFalsy()
-    expect(response.status).toEqual(404)
-  })
-
-  test('sequence with an action that throws an error (500)', async () => {
-    const url = createApiUrl({ isWeb: false, actionName: 'sequenceWithActionThatThrowsError' })
-
-    const response = await fetch(url, { agent: httpsAgent })
-    expect(response.ok).toBeFalsy()
-    expect(response.status).toEqual(500)
-  })
-
-  test('sequence with an action that has no main export (401)', async () => {
-    const url = createApiUrl({ isWeb: false, actionName: 'sequenceWithActionThatHasNoMainExport' })
-
-    const response = await fetch(url, { agent: httpsAgent })
-    expect(response.ok).toBeFalsy()
-    expect(response.status).toEqual(401)
+      const response = await fetch(url, { agent: httpsAgent })
+      expect(response.ok).toBeFalsy()
+      expect(response.status).toEqual(expectedStatusCode)
+    }
   })
 })
