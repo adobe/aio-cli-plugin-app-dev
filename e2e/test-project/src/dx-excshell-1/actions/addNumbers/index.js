@@ -20,8 +20,12 @@ async function addNumbers (params) {
   const { payload } = params
   if (!payload) {
     return {
-      statusCode: 400,
-      error: 'payload parameter was not provided'
+      error: {
+        statusCode: 400,
+        body: {
+          error: 'payload parameter was not provided'
+        }
+      }
     }
   } else {
     const nums = payload.split(',')

@@ -22,8 +22,10 @@ async function squareNumber (params) {
 
   if (!payload) {
     return {
-      statusCode: 400,
-      error: 'payload parameter was not provided'
+      error: {
+        statusCode: 400,
+        body: 'payload parameter was not provided'
+      }
     }
   } else {
     return {
