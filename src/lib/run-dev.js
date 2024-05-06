@@ -305,10 +305,7 @@ async function invokeSequence ({ actionRequestContext, logger }) {
     }
   }
 
-  return {
-    statusCode: 200,
-    ...lastActionResponse
-  }
+  return lastActionResponse
 }
 
 /**
