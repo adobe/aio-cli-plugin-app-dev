@@ -53,7 +53,16 @@ const waitFor = (t) => {
 
 const startServer = ({ e2eProject, port }) => {
   const cwd = path.join(__dirname, e2eProject)
+  const projectNodeModules = path.join(cwd, 'node_modules')
   const cmd = path.join(__dirname, '..', 'bin', 'run')
+
+  if (!fs.pathExistsSync(projectNodeModules)) {
+    console.warn(`It looks like the project at ${cwd} was not installed via 'npm install'. Running 'npm install'.`)
+    execa.sync('npm', ['install'], {
+      stdio: 'inherit',
+      cwd
+    })
+  }
 
   return execa.command(`${cmd} app dev`, {
     stdio: 'inherit',
@@ -104,7 +113,7 @@ describe('test-project http api tests', () => {
   })
 
   afterAll(() => {
-    console.log(`killed server at port ${PORT}:`, serverProcess.kill('SIGTERM', {
+    console.log(`killed server at port ${PORT}:`, serverProcess?.kill?.('SIGTERM', {
       forceKillAfterTimeout: 2000
     }))
   })
