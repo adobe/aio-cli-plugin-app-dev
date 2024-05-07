@@ -77,7 +77,10 @@ class Dev extends BaseCommand {
 
     blueBoldLog('Your actions:')
     const webActions = Object.values(actionUrls).filter(url => url.includes(DEV_API_WEB_PREFIX))
-    const nonWebActions = Object.values(actionUrls).filter(url => !url.includes(DEV_API_WEB_PREFIX))
+    const nonWebActions = Object.keys(actionUrls).filter((key) => {
+      const url = actionUrls[key]
+      return !url.includes(DEV_API_WEB_PREFIX)
+    })
 
     this.log('web actions:')
     webActions.forEach(printUrl)
