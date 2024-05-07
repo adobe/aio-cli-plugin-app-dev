@@ -356,19 +356,20 @@ async function invokeAction ({ actionRequestContext, logger }) {
               }
         */
         if (response.error) {
-          statusCode = response.error.statusCode || 200 // this is the OW default if omitted
+          statusCode = response.error.statusCode
           body = response.error.body
         } else {
-          statusCode = response.statusCode || 200 // this is the OW default if omitted
+          statusCode = response.statusCode
           body = response.body
         }
       } else { // no response data
         statusCode = 204
+        body = ''
       }
 
       return {
-        headers: headers || {},
-        statusCode,
+        headers,
+        statusCode: statusCode || 200, // this is the OW default if omitted
         body
       }
     } catch (e) {
