@@ -56,16 +56,6 @@ global.fixtureJson = (output) => {
   return JSON.parse(fs.readFileSync(global.fixturePath(output)).toString())
 }
 
-// // helper for fixtures
-// global.fixtureHjson = (output) => {
-//   return hjson.parse(fs.readFileSync(global.fixturePath(output)).toString())
-// }
-
-// // helper for fixtures
-// global.fixtureYaml = (output) => {
-//   return jsYaml.load(fs.readFileSync(global.fixturePath(output)).toString())
-// }
-
 // fixture matcher
 expect.extend({
   toMatchFixture (received, argument) {
@@ -84,12 +74,3 @@ expect.extend({
     return { pass: true }
   }
 })
-
-// expect.extend({
-//   toMatchFixtureHjson (received, argument) {
-//     const val = fixtureHjson(argument)
-//     // eslint-disable-next-line jest/no-standalone-expect
-//     expect(received).toEqual(val)
-//     return { pass: true }
-//   }
-// })

@@ -152,6 +152,8 @@ test('exports', () => {
   expect(invokeSequence).toBeDefined()
   expect(isRawWebAction).toBeDefined()
   expect(isWebAction).toBeDefined()
+  expect(isObjectNotArray).toBeDefined()
+  expect(statusCodeMessage).toBeDefined()
 })
 
 describe('isWebAction', () => {

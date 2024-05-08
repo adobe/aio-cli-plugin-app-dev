@@ -412,17 +412,11 @@ describe('getOrGenerateCertificates', () => {
 
   beforeEach(() => {
     command = new TheCommand()
-    // command.error = jest.fn((message) => { throw new Error(message) })
-    // command.log = jest.fn()
     command.config = {
       findCommand: jest.fn().mockReturnValue({
         load: mockFindCommandLoad
       })
-      // dataDir: '/data/dir'
     }
-    // command.appConfig = cloneDeep(mockConfigData)
-    // command.getAppExtConfigs = jest.fn()
-    // command.getLaunchUrlPrefix = jest.fn(() => 'https://my.launch.prefix/?localDevUrl=')
   })
 
   test('no existing certs', async () => {
