@@ -34,6 +34,7 @@ The tests will run `npm install` on the test project if it wasn't run before.
     E2E_PORT = # (optional) defaults to 9080 (set to 443 for https)
     E2E_PACKAGE_NAME = # (optional) defaults to 'dx-excshell-1'
     E2E_ACCESS_TOKEN = # (required) required for remote e2e tests that require authentication
+    E2E_GW_IMS_ORG_ID = # (required) required for remote e2e tests that require authentication
     ```
 
 3. Change the appropriate values according to the url(s) you see after `aio app deploy`

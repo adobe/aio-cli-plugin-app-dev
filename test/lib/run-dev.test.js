@@ -615,7 +615,8 @@ describe('invokeSequence', () => {
     {
       const sequenceParams = {
         __ow_headers: {
-          authorization: 'some-auth-key'
+          authorization: 'some-auth-key',
+          'x-gw-ims-org-id': 'some-org-id'
         }
       }
       const actionRequestContext = { contextItem: sequence, contextItemParams: sequenceParams, packageName, actionConfig }
@@ -626,7 +627,8 @@ describe('invokeSequence', () => {
     {
       const sequenceParams = {
         __ow_headers: {
-          Authorization: 'some-auth-key'
+          Authorization: 'some-auth-key',
+          'x-gw-ims-org-id': 'some-org-id'
         }
       }
       const actionRequestContext = { contextItem: sequence, contextItemParams: sequenceParams, packageName, actionConfig }

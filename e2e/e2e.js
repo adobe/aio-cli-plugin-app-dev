@@ -32,7 +32,8 @@ const {
   E2E_API_HOST = E2E_CDN_HOST,
   E2E_PORT = 9080,
   E2E_PACKAGE_NAME = 'dx-excshell-1',
-  E2E_ACCESS_TOKEN = 'some-auth-key'
+  E2E_ACCESS_TOKEN = 'some-auth-key',
+  E2E_GW_IMS_ORG_ID = 'some-org-id'
 } = process.env
 
 const HTTPS_AGENT = E2E_CDN_HOST === LOCALHOST
@@ -157,9 +158,11 @@ describe('http api tests', () => {
     const response = await fetch(url, {
       agent: HTTPS_AGENT,
       headers: {
-        Authorization: E2E_ACCESS_TOKEN
+        Authorization: `Bearer ${E2E_ACCESS_TOKEN}`,
+        'x-gw-ims-org-id': E2E_GW_IMS_ORG_ID
       }
     })
+
     expect(response.ok).toBeTruthy()
     expect(response.status).toEqual(200)
     expect(await response.text()).toEqual(expect.any(String))

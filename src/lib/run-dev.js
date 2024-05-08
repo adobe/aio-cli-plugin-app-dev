@@ -327,11 +327,13 @@ async function invokeAction ({ actionRequestContext, logger }) {
         return obj
       }, {})
 
-    // check if user is authenticated
-    if (!owHeaders?.authorization) {
-      return {
-        statusCode: 401,
-        body: { error: 'cannot authorize request, reason: missing authorization header' }
+    const requiredAuthHeaders = ['authorization', 'x-gw-ims-org-id']
+    for (const headerKey of requiredAuthHeaders) {
+      if (!owHeaders?.[headerKey]) {
+        return {
+          statusCode: 401,
+          body: { error: `cannot authorize request, reason: missing ${headerKey} header` }
+        }
       }
     }
   }
