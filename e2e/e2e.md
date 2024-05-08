@@ -21,3 +21,19 @@ The tests will run `npm install` on the test project if it wasn't run before.
     ```
 
 4. Run `aio app deploy --no-publish`
+
+## Running the e2e tests on production (for verification testing)
+
+1. Deploy the `e2e/test-project` folder (see above section).
+2. Copy the `.env.example` file, and rename it to `.env`
+
+    ```sh
+    E2E_SCHEME = # (optional) defaults to 'https'
+    E2E_CDN_HOST = # (required) e.g. <number>-<project-name>-<workspace.adobeio-static.net
+    E2E_API_HOST = # (required) e.g. <number>-<project-name>-<workspace.adobeioruntime.net
+    E2E_PORT = # (optional) defaults to 9080 (set to 443 for https)
+    E2E_PACKAGE_NAME = # (optional) defaults to 'dx-excshell-1'
+    ```
+
+3. Change the appropriate values according to the url(s) you see after `aio app deploy`
+4. Run `npm run e2e`

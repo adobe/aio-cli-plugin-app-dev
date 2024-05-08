@@ -21,21 +21,36 @@ const { DEV_API_PREFIX, DEV_API_WEB_PREFIX } = require('../src/lib/constants')
 jest.unmock('execa')
 jest.setTimeout(30000)
 
-const httpsAgent = new https.Agent({
-  rejectUnauthorized: false
-})
+// load .env values in the e2e folder, if any
+require('dotenv').config({ path: path.join(__dirname, '.env') })
+
+const LOCALHOST = 'localhost'
+const {
+  E2E_SCHEME = 'https',
+  E2E_PROJECT = 'test-project',
+  E2E_CDN_HOST = LOCALHOST,
+  E2E_API_HOST = E2E_CDN_HOST,
+  E2E_PORT = 9080,
+  E2E_PACKAGE_NAME = 'dx-excshell-1'
+} = process.env
+
+const HTTPS_AGENT = E2E_CDN_HOST === LOCALHOST
+  ? new https.Agent({ rejectUnauthorized: false })
+  : undefined
 
 const waitForServerReady = async ({ host, startTime, period, timeout, lastStatus }) => {
-  if (Date.now() > (startTime + timeout)) {
-    throw new Error(`local dev server startup timed out after ${timeout}ms due to ${lastStatus}`)
+  const now = Date.now()
+  if (now > (startTime + timeout)) {
+    throw new Error(`local dev server startup timed out after ${timeout}ms due to ${lastStatus} ${now} ${startTime} ${timeout}`)
   }
 
   let ok, status
 
   try {
-    const response = await fetch(host, { agent: httpsAgent })
+    const response = await fetch(host, { agent: HTTPS_AGENT })
     ok = response.ok
     status = response.statusText
+    console.log('RESPONSE', ok, status)
   } catch (e) {
     ok = false
     status = e.toString()
@@ -87,41 +102,39 @@ test('boilerplate help test', async () => {
   console.log(`    - done for ${name}`)
 })
 
-describe('test-project http api tests', () => {
-  const SCHEME = 'https'
-  const PROJECT = 'test-project'
-  const HOST = 'localhost'
-  const PORT = 9080
-  const PACKAGE_NAME = 'dx-excshell-1'
-
+describe('http api tests', () => {
   let serverProcess
 
-  const createApiUrl = ({ scheme = SCHEME, isWeb = true, packageName = PACKAGE_NAME, actionName }) => {
+  const createApiUrl = ({ host = E2E_CDN_HOST, isWeb = true, packageName = E2E_PACKAGE_NAME, actionName }) => {
     const prefix = isWeb ? DEV_API_WEB_PREFIX : DEV_API_PREFIX
-    return `${scheme}://${HOST}:${PORT}/${prefix}/${packageName}/${actionName}`
+    return `${E2E_SCHEME}://${host}:${E2E_PORT}/${prefix}/${packageName}/${actionName}`
   }
 
   beforeAll(async () => {
-    serverProcess = startServer({ e2eProject: PROJECT, PORT })
-    const timeoutMs = 10000
-    await waitForServerReady({
-      host: `${SCHEME}://${HOST}:${PORT}`,
-      startTime: Date.now(),
-      period: 1000,
-      timeout: timeoutMs
-    })
+    if (E2E_CDN_HOST === 'localhost') {
+      serverProcess = startServer({ e2eProject: E2E_PROJECT, port: E2E_PORT })
+      const timeoutMs = 10000
+      await waitForServerReady({
+        host: `${E2E_SCHEME}://${E2E_CDN_HOST}:${E2E_PORT}`,
+        startTime: Date.now(),
+        period: 1000,
+        timeout: timeoutMs
+      })
+    }
   })
 
   afterAll(() => {
-    console.log(`killed server at port ${PORT}:`, serverProcess?.kill?.('SIGTERM', {
-      forceKillAfterTimeout: 2000
-    }))
+    if (E2E_CDN_HOST === 'localhost') {
+      console.log(`killed server at port ${E2E_PORT}:`, serverProcess?.kill?.('SIGTERM', {
+        forceKillAfterTimeout: 2000
+      }))
+    }
   })
 
   test('front end is available (200)', async () => {
-    const url = `https://${HOST}:${PORT}/index.html`
+    const url = `https://${E2E_CDN_HOST}:${E2E_PORT}/index.html`
 
-    const response = await fetch(url, { agent: httpsAgent })
+    const response = await fetch(url, { agent: HTTPS_AGENT })
     expect(response.ok).toBeTruthy()
     expect(response.status).toEqual(200)
     expect(await response.text()).toMatch('<html')
@@ -130,7 +143,7 @@ describe('test-project http api tests', () => {
   test('web action requires adobe auth, *no* auth provided (401)', async () => {
     const url = createApiUrl({ actionName: 'requireAdobeAuth' })
 
-    const response = await fetch(url, { agent: httpsAgent })
+    const response = await fetch(url, { agent: HTTPS_AGENT })
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(401)
     expect(await response.json()).toEqual({
@@ -142,7 +155,7 @@ describe('test-project http api tests', () => {
     const url = createApiUrl({ actionName: 'requireAdobeAuth' })
 
     const response = await fetch(url, {
-      agent: httpsAgent,
+      agent: HTTPS_AGENT,
       headers: {
         Authorization: 'something'
       }
@@ -157,7 +170,7 @@ describe('test-project http api tests', () => {
     {
       const url = createApiUrl({ actionName: 'noAdobeAuth' })
 
-      const response = await fetch(url, { agent: httpsAgent })
+      const response = await fetch(url, { agent: HTTPS_AGENT })
       expect(response.ok).toBeTruthy()
       expect(response.status).toEqual(200)
       expect(await response.text()).toEqual(expect.any(String))
@@ -166,7 +179,7 @@ describe('test-project http api tests', () => {
     {
       const url = createApiUrl({ actionName: 'noResponseObject' })
 
-      const response = await fetch(url, { agent: httpsAgent })
+      const response = await fetch(url, { agent: HTTPS_AGENT })
       expect(response.ok).toBeTruthy()
       expect(response.status).toEqual(204)
       expect(await response.text()).toEqual('') // no body
@@ -176,7 +189,7 @@ describe('test-project http api tests', () => {
   test('web action is not found (404)', async () => {
     const url = createApiUrl({ actionName: 'SomeActionThatDoesNotExist' })
 
-    const response = await fetch(url, { agent: httpsAgent })
+    const response = await fetch(url, { agent: HTTPS_AGENT })
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(404)
     expect(await response.json()).toEqual({
@@ -187,7 +200,7 @@ describe('test-project http api tests', () => {
   test('web action throws an exception (400)', async () => {
     const url = createApiUrl({ actionName: 'throwsError' })
 
-    const response = await fetch(url, { agent: httpsAgent })
+    const response = await fetch(url, { agent: HTTPS_AGENT })
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(400)
     expect(await response.json()).toEqual({
@@ -198,7 +211,7 @@ describe('test-project http api tests', () => {
   test('web action does not have a main function export (400)', async () => {
     const url = createApiUrl({ actionName: 'noMainExport' })
 
-    const response = await fetch(url, { agent: httpsAgent })
+    const response = await fetch(url, { agent: HTTPS_AGENT })
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(400)
     expect(await response.json()).toEqual({
@@ -209,7 +222,7 @@ describe('test-project http api tests', () => {
   test('web sequence with all actions available (200)', async () => {
     const url = createApiUrl({ actionName: 'sequenceWithAllActionsAvailable' })
 
-    const response = await fetch(url, { agent: httpsAgent })
+    const response = await fetch(url, { agent: HTTPS_AGENT })
     expect(response.ok).toBeTruthy()
     expect(response.status).toEqual(200)
   })
@@ -217,7 +230,7 @@ describe('test-project http api tests', () => {
   test('web sequence with missing action (400)', async () => {
     const url = createApiUrl({ actionName: 'sequenceWithMissingAction' })
 
-    const response = await fetch(url, { agent: httpsAgent })
+    const response = await fetch(url, { agent: HTTPS_AGENT })
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(400)
     expect(await response.json()).toEqual({
@@ -228,7 +241,7 @@ describe('test-project http api tests', () => {
   test('web sequence with an action that throws an error (400)', async () => {
     const url = createApiUrl({ actionName: 'sequenceWithActionThatThrowsError' })
 
-    const response = await fetch(url, { agent: httpsAgent })
+    const response = await fetch(url, { agent: HTTPS_AGENT })
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(400)
     expect(await response.json()).toEqual({
@@ -239,7 +252,7 @@ describe('test-project http api tests', () => {
   test('web sequence with an action that has no main export (400)', async () => {
     const url = createApiUrl({ actionName: 'sequenceWithActionThatHasNoMainExport' })
 
-    const response = await fetch(url, { agent: httpsAgent })
+    const response = await fetch(url, { agent: HTTPS_AGENT })
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(400)
     expect(await response.json()).toEqual({
@@ -252,7 +265,7 @@ describe('test-project http api tests', () => {
     {
       const url = createApiUrl({ actionName: 'addNumbersThenSquareIt?payload=1,2,3,4' })
       const response = await fetch(url, {
-        agent: httpsAgent
+        agent: HTTPS_AGENT
       })
       expect(response.ok).toBeTruthy()
       expect(response.status).toEqual(200)
@@ -262,7 +275,7 @@ describe('test-project http api tests', () => {
     {
       const url = createApiUrl({ actionName: 'addNumbersThenSquareIt?payload=9,5,2,7' })
       const response = await fetch(url, {
-        agent: httpsAgent
+        agent: HTTPS_AGENT
       })
       expect(response.ok).toBeTruthy()
       expect(response.status).toEqual(200)
@@ -275,7 +288,7 @@ describe('test-project http api tests', () => {
 
     const url = createApiUrl({ isWeb: true, actionName: 'nonWebSequence' })
 
-    const response = await fetch(url, { agent: httpsAgent })
+    const response = await fetch(url, { agent: HTTPS_AGENT })
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(expectedStatusCode)
   })
@@ -283,9 +296,9 @@ describe('test-project http api tests', () => {
   test('non-web action called via /api/v1/web (404)', async () => {
     const expectedStatusCode = 404
 
-    const url = createApiUrl({ isWeb: true, actionName: 'actionIsNonWeb' })
+    const url = createApiUrl({ isWeb: true, host: E2E_API_HOST, actionName: 'actionIsNonWeb' })
 
-    const response = await fetch(url, { agent: httpsAgent })
+    const response = await fetch(url, { agent: HTTPS_AGENT })
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(expectedStatusCode)
   })
@@ -295,17 +308,17 @@ describe('test-project http api tests', () => {
 
     // 1. non-web action exists
     {
-      const url = createApiUrl({ isWeb: false, actionName: 'actionIsNonWeb' })
+      const url = createApiUrl({ isWeb: false, host: E2E_API_HOST, actionName: 'actionIsNonWeb' })
 
-      const response = await fetch(url, { agent: httpsAgent })
+      const response = await fetch(url, { agent: HTTPS_AGENT })
       expect(response.ok).toBeFalsy()
       expect(response.status).toEqual(expectedStatusCode)
     }
     // 2. non-web action not found
     {
-      const url = createApiUrl({ isWeb: false, actionName: 'SomeActionThatDoesNotExist' })
+      const url = createApiUrl({ isWeb: false, host: E2E_API_HOST, actionName: 'SomeActionThatDoesNotExist' })
 
-      const response = await fetch(url, { agent: httpsAgent })
+      const response = await fetch(url, { agent: HTTPS_AGENT })
       expect(response.ok).toBeFalsy()
       expect(response.status).toEqual(expectedStatusCode)
     }
@@ -316,17 +329,17 @@ describe('test-project http api tests', () => {
 
     // 1. non-web sequence exists
     {
-      const url = createApiUrl({ isWeb: false, actionName: 'nonWebSequence' })
+      const url = createApiUrl({ isWeb: false, host: E2E_API_HOST, actionName: 'nonWebSequence' })
 
-      const response = await fetch(url, { agent: httpsAgent })
+      const response = await fetch(url, { agent: HTTPS_AGENT })
       expect(response.ok).toBeFalsy()
       expect(response.status).toEqual(expectedStatusCode)
     }
     // 2. non-web sequence not found
     {
-      const url = createApiUrl({ isWeb: false, actionName: 'SomeSequenceThatDoesNotExist' })
+      const url = createApiUrl({ isWeb: false, host: E2E_API_HOST, actionName: 'SomeSequenceThatDoesNotExist' })
 
-      const response = await fetch(url, { agent: httpsAgent })
+      const response = await fetch(url, { agent: HTTPS_AGENT })
       expect(response.ok).toBeFalsy()
       expect(response.status).toEqual(expectedStatusCode)
     }
