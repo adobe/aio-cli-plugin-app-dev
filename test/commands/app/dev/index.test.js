@@ -147,6 +147,7 @@ describe('run', () => {
   test('run, verbose flag, one extension', async () => {
     command.argv = ['--verbose']
     const appConfig = {
+      manifest: { full: { packages: {} } },
       hooks: {
       },
       app: {
@@ -176,6 +177,7 @@ describe('run', () => {
   test('run, no flags, no frontend nor backend', async () => {
     command.argv = []
     const appConfig = {
+      manifest: { full: { packages: {} } },
       hooks: {
       },
       app: {
@@ -197,6 +199,7 @@ describe('run', () => {
   test('run, no flags, no frontend, has backend', async () => {
     command.argv = []
     const appConfig = {
+      manifest: { full: { packages: {} } },
       hooks: {
       },
       app: {
@@ -220,6 +223,7 @@ describe('run', () => {
   test('run, no flags, has frontend, no backend', async () => {
     command.argv = []
     const appConfig = {
+      manifest: { full: { packages: {} } },
       hooks: {
       },
       app: {
@@ -244,6 +248,7 @@ describe('run', () => {
     const errMessage = 'something went wrong with running the process'
     command.argv = []
     const appConfig = {
+      manifest: { full: { packages: {} } },
       hooks: {
       },
       app: {
@@ -271,6 +276,7 @@ describe('run', () => {
     const errMessage = 'this is an error'
     command.argv = []
     const appConfig = {
+      manifest: { full: { packages: {} } },
       hooks: {
       },
       app: {
@@ -290,6 +296,7 @@ describe('run', () => {
     const errMessage = 'this is an error'
     command.argv = []
     const appConfig = {
+      manifest: { full: { packages: {} } },
       hooks: {
       },
       app: {
@@ -308,6 +315,7 @@ describe('run', () => {
   test('run, no flags, multiple extensions', async () => {
     command.argv = []
     const appConfig = {
+      manifest: { full: { packages: {} } },
       hooks: {
       },
       app: {
@@ -330,6 +338,7 @@ describe('run', () => {
     const myExtension = 'myextension'
     command.argv = ['--extension', myExtension]
     const appConfig = {
+      manifest: { full: { packages: {} } },
       hooks: {
       },
       app: {
@@ -354,6 +363,7 @@ describe('run', () => {
     const theExtension = 'unknown_extension'
     command.argv = ['--extension', theExtension]
     const appConfig = {
+      manifest: { full: { packages: {} } },
       hooks: {
       },
       app: {
@@ -375,6 +385,7 @@ describe('run', () => {
   test('run with --open flag', async () => {
     command.argv = ['--open']
     const appConfig = {
+      manifest: { full: { packages: {} } },
       hooks: {
       },
       app: {
@@ -466,5 +477,94 @@ describe('getOrGenerateCertificates', () => {
 
     await expect(command.getOrGenerateCertificates({ ...certConfig, maxWaitTimeSeconds: 0.5 }))
       .resolves.toEqual({ cert: certConfig.pubCertPath, key: certConfig.privateKeyPath })
+  })
+})
+
+describe('verifyActionConfig', () => {
+  let command
+
+  beforeEach(() => {
+    command = new TheCommand()
+    command.error = jest.fn(() => {})
+  })
+
+  test('good config', async () => {
+    const actionConfig = {
+      mypackage: {
+        sequences: {
+          mysequence: {
+            actions: 'a,b,c'
+          }
+        },
+        actions: {
+          a: {},
+          b: {},
+          c: {}
+        }
+      }
+    }
+    const appConfig = {
+      manifest: { full: { packages: actionConfig } }
+    }
+
+    await command.verifyActionConfig(appConfig)
+    expect(command.error).not.toHaveBeenCalled()
+  })
+
+  test('good config (no sequences or actions)', async () => {
+    const actionConfig = {
+      mypackage: {
+      }
+    }
+    const appConfig = {
+      manifest: { full: { packages: actionConfig } }
+    }
+
+    await command.verifyActionConfig(appConfig)
+    expect(command.error).not.toHaveBeenCalled()
+  })
+
+  test('sequence has no actions', async () => {
+    const sequenceName = 'mysequence'
+
+    const actionConfig = {
+      mypackage: {
+        sequences: {
+          [sequenceName]: {}
+        }
+      }
+    }
+    const appConfig = {
+      manifest: { full: { packages: actionConfig } }
+    }
+
+    await command.verifyActionConfig(appConfig)
+    expect(command.error).toHaveBeenCalledWith(`Actions for the sequence '${sequenceName}' not provided.`)
+  })
+
+  test('sequence with action not found', async () => {
+    const missingAction = 'z'
+    const sequenceName = 'mysequence'
+
+    const actionConfig = {
+      mypackage: {
+        sequences: {
+          [sequenceName]: {
+            actions: `a,b,c,${missingAction}`
+          }
+        },
+        actions: {
+          a: {},
+          b: {},
+          c: {}
+        }
+      }
+    }
+    const appConfig = {
+      manifest: { full: { packages: actionConfig } }
+    }
+
+    await command.verifyActionConfig(appConfig)
+    expect(command.error).toHaveBeenCalledWith(`Sequence component '${missingAction}' does not exist (sequence = '${sequenceName}')`)
   })
 })

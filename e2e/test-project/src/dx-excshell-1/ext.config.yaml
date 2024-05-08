@@ -12,9 +12,6 @@ runtimeManifest:
         nonWebSequence:
           actions: noAdobeAuth, simpleAction
           web: false
-        sequenceWithMissingAction:
-          actions: noAdobeAuth, someNonExistentAction, simpleAction
-          web: true
         sequenceWithAllActionsAvailable:
           actions: noAdobeAuth, simpleAction
           web: true

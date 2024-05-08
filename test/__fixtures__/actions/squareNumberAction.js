@@ -24,14 +24,15 @@ async function squareNumber (params) {
     return {
       error: {
         statusCode: 400,
-        body: 'payload parameter was not provided'
+        body: 'payload parameter was not provided (squareNumber)'
       }
     }
   } else {
+    const squaredNum = num * num
     return {
-      statusCode: 200,
+      payload: squaredNum, // to be passed to other actions in the sequence as part of params
       body: {
-        payload: (num * num)
+        payload: squaredNum // sent to the http client for a stand-alone call
       }
     }
   }

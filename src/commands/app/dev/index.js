@@ -41,7 +41,9 @@ class Dev extends BaseCommand {
     let entry = entries[0]
 
     if (flags.extension) {
-      entry = entries.find(([name]) => name === flags.extension)
+      flags.extension.forEach((extName) => {
+        entry = entries.find(([entryName]) => entryName === extName)
+      })
       if (!entry) {
         this.error(`extension '${flags.extension}' was not found.`)
       }
@@ -51,6 +53,8 @@ class Dev extends BaseCommand {
 
     const [name, config] = entry
     try {
+      // do some verification
+      await this.verifyActionConfig(config)
       // now we are good, either there is only 1 extension point or -e flag for one was provided
       await this.runOneExtensionPoint(name, config, flags)
     } catch (error) {
@@ -88,6 +92,38 @@ class Dev extends BaseCommand {
     nonWebActions.forEach(printUrl)
   }
 
+  /**
+   * Verifies the app config sequences and actions, based on criteria.
+   * 1. all actions in sequences must exist
+   *
+   * @param {object} config the config for the app
+   */
+  async verifyActionConfig (config) {
+    const actionConfig = config.manifest.full.packages
+
+    // 1. all actions in sequences must exist
+    Object.entries(actionConfig).forEach(([_, pkg]) => { // iterate through each package
+      const sequences = pkg?.sequences || {}
+      const actions = pkg?.actions || {}
+
+      Object.entries(sequences).forEach(([sequenceName, sequence]) => {
+        const sequenceActions = sequence?.actions?.split(',') || []
+        if (sequenceActions.length === 0) {
+          this.error(`Actions for the sequence '${sequenceName}' not provided.`)
+        }
+
+        sequenceActions
+          .map((a) => a.trim())
+          .forEach((actionName) => {
+            const action = actions[actionName]
+            if (!action) {
+              this.error(`Sequence component '${actionName}' does not exist (sequence = '${sequenceName}')`)
+            }
+          })
+      })
+    })
+  }
+
   async runOneExtensionPoint (name, config, flags) {
     aioLogger.debug('runOneExtensionPoint called with', name, flags)
 
@@ -107,7 +143,6 @@ class Dev extends BaseCommand {
         shouldContentHash: false
       },
       fetchLogs: true,
-      isLocal: true,
       verbose: flags.verbose
     }
 
@@ -241,6 +276,7 @@ Dev.flags = {
   extension: Flags.string({
     description: 'Run only a specific extension, this flag can only be specified once',
     char: 'e',
+    parse: (str) => [str],
     // we do not support multiple yet
     multiple: false
   })

@@ -50,7 +50,6 @@ const waitForServerReady = async ({ host, startTime, period, timeout, lastStatus
     const response = await fetch(host, { agent: HTTPS_AGENT })
     ok = response.ok
     status = response.statusText
-    console.log('RESPONSE', ok, status)
   } catch (e) {
     ok = false
     status = e.toString()
@@ -225,17 +224,6 @@ describe('http api tests', () => {
     const response = await fetch(url, { agent: HTTPS_AGENT })
     expect(response.ok).toBeTruthy()
     expect(response.status).toEqual(200)
-  })
-
-  test('web sequence with missing action (400)', async () => {
-    const url = createApiUrl({ actionName: 'sequenceWithMissingAction' })
-
-    const response = await fetch(url, { agent: HTTPS_AGENT })
-    expect(response.ok).toBeFalsy()
-    expect(response.status).toEqual(400)
-    expect(await response.json()).toMatchObject({
-      error: 'Sequence component does not exist.'
-    })
   })
 
   test('web sequence with an action that throws an error (400)', async () => {

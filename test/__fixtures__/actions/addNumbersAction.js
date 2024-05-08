@@ -23,7 +23,7 @@ async function addNumbers (params) {
       error: {
         statusCode: 400,
         body: {
-          error: 'payload parameter was not provided'
+          error: 'payload parameter was not provided (addNumbers)'
         }
       }
     }
@@ -31,9 +31,9 @@ async function addNumbers (params) {
     const nums = payload.split(',')
     const sum = nums.reduce((accum, num) => accum + parseInt(num.trim(), 10), 0)
     return {
-      statusCode: 200,
+      payload: sum, // to be passed to other actions in the sequence as part of params
       body: {
-        payload: sum
+        payload: sum // sent to the http client for a stand-alone call
       }
     }
   }

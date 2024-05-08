@@ -486,13 +486,27 @@ describe('invokeSequence', () => {
     expect(response).toEqual(null)
   })
 
-  test('defined sequence (with actions)', async () => {
+  test('unknown action in sequence', async () => {
     const packageName = 'foo'
-    let sequence, actionConfig, actionRequestContext, response
 
-    // 1 action in sequence
-    sequence = { actions: 'a' }
-    actionConfig = {
+    const sequence = { actions: 'a, unknown_action' }
+    const actionConfig = {
+      [packageName]: {
+        actions: {
+          a: { function: fixturePath('actions/successNoReturnAction.js') }
+        }
+      }
+    }
+    const actionRequestContext = { contextItem: sequence, contextItemParams: {}, packageName, actionConfig }
+    const response = await invokeSequence({ actionRequestContext, logger: mockLogger })
+    expect(response).toEqual({ body: { error: 'Sequence component does not exist.' }, statusCode: 400 })
+  })
+
+  test('defined sequence (one action)', async () => {
+    const packageName = 'foo'
+
+    const sequence = { actions: 'a' }
+    const actionConfig = {
       [packageName]: {
         actions: {
           a: {
@@ -501,13 +515,16 @@ describe('invokeSequence', () => {
         }
       }
     }
-    actionRequestContext = { contextItem: sequence, contextItemParams: {}, packageName, actionConfig }
-    response = await invokeSequence({ actionRequestContext, logger: mockLogger })
+    const actionRequestContext = { contextItem: sequence, contextItemParams: {}, packageName, actionConfig }
+    const response = await invokeSequence({ actionRequestContext, logger: mockLogger })
     expect(response).toEqual({ body: '', statusCode: 204 })
+  })
 
-    // multiple actions in sequence
-    sequence = { actions: 'a, b, c' }
-    actionConfig = {
+  test('defined sequence (multiple actions)', async () => {
+    const packageName = 'foo'
+
+    const sequence = { actions: 'a, b, c' }
+    const actionConfig = {
       [packageName]: {
         actions: {
           a: { function: fixturePath('actions/successNoReturnAction.js') },
@@ -516,23 +533,29 @@ describe('invokeSequence', () => {
         }
       }
     }
-    actionRequestContext = { contextItem: sequence, contextItemParams: {}, packageName, actionConfig }
-    response = await invokeSequence({ actionRequestContext, logger: mockLogger })
+    const actionRequestContext = { contextItem: sequence, contextItemParams: {}, packageName, actionConfig }
+    const response = await invokeSequence({ actionRequestContext, logger: mockLogger })
     expect(response).toEqual({ body: '', statusCode: 204 })
+  })
 
-    // unknown action in sequence
-    sequence = { actions: 'a, unknown_action' }
-    actionConfig = {
+  test('sequence with action that does not return an object (coverage)', async () => {
+    const packageName = 'foo'
+
+    const sequence = { actions: 'a, b' }
+    const actionConfig = {
       [packageName]: {
         actions: {
-          a: { function: fixturePath('actions/successNoReturnAction.js') }
+          a: { function: fixturePath('actions/successNoReturnAction.js') },
+          b: { function: fixturePath('actions/successReturnNonObject.js') }
         }
       }
     }
-    actionRequestContext = { contextItem: sequence, contextItemParams: {}, packageName, actionConfig }
-    response = await invokeSequence({ actionRequestContext, logger: mockLogger })
-    expect(response).toEqual({ body: { error: 'Sequence component does not exist.' }, statusCode: 400 })
+    const actionRequestContext = { contextItem: sequence, contextItemParams: {}, packageName, actionConfig }
+    const response = await invokeSequence({ actionRequestContext, logger: mockLogger })
+    expect(response).toEqual({ body: '', statusCode: 200 })
   })
+
+  // successReturnNonObject
 
   test('action not found', async () => {
     const packageName = 'foo'
@@ -572,14 +595,9 @@ describe('invokeSequence', () => {
     expect(response).toEqual({ body: { error: 'cannot authorize request, reason: missing authorization header' }, statusCode: 401 })
   })
 
-  test('require-adobe-auth, with authorization header', async () => {
+  test('require-adobe-auth, with authorization header (lowercase and uppercase)', async () => {
     const packageName = 'foo'
     const sequence = { actions: 'a' }
-    const sequenceParams = {
-      __ow_headers: {
-        authorization: 'some-auth-key'
-      }
-    }
     const actionConfig = {
       [packageName]: {
         actions: {
@@ -593,9 +611,28 @@ describe('invokeSequence', () => {
       }
     }
 
-    const actionRequestContext = { contextItem: sequence, contextItemParams: sequenceParams, packageName, actionConfig }
-    const response = await invokeSequence({ actionRequestContext, logger: mockLogger })
-    expect(response).toEqual({ body: '', statusCode: 204 })
+    // 1. lowercase
+    {
+      const sequenceParams = {
+        __ow_headers: {
+          authorization: 'some-auth-key'
+        }
+      }
+      const actionRequestContext = { contextItem: sequence, contextItemParams: sequenceParams, packageName, actionConfig }
+      const response = await invokeSequence({ actionRequestContext, logger: mockLogger })
+      expect(response).toEqual({ body: '', statusCode: 204 })
+    }
+    // 2. Uppercase
+    {
+      const sequenceParams = {
+        __ow_headers: {
+          Authorization: 'some-auth-key'
+        }
+      }
+      const actionRequestContext = { contextItem: sequence, contextItemParams: sequenceParams, packageName, actionConfig }
+      const response = await invokeSequence({ actionRequestContext, logger: mockLogger })
+      expect(response).toEqual({ body: '', statusCode: 204 })
+    }
   })
 
   test('action that throws an exception', async () => {
@@ -651,7 +688,7 @@ describe('invokeSequence', () => {
     const actionRequestContext = { contextItem: sequence, contextItemParams: sequenceParams, packageName, actionConfig }
     const response = await invokeSequence({ actionRequestContext, logger: mockLogger })
     // result of sequence with the two actions: 1+2+3 = 6, then 6*6 = 36
-    expect(response).toEqual({ body: { payload: 36 }, statusCode: 200 })
+    expect(response).toMatchObject({ body: { payload: 36 }, statusCode: 200 })
   })
 })
 
@@ -1012,6 +1049,14 @@ describe('isObjectNotArray', () => {
   })
 
   test('object literal should be true', () => {
-    expect({ some: 'object' }).toBeTruthy()
+    expect(isObjectNotArray({ some: 'object' })).toBeTruthy()
+  })
+
+  test('string should be false', () => {
+    expect(isObjectNotArray('some string')).toBeFalsy()
+  })
+
+  test('function should be false', () => {
+    expect(isObjectNotArray(() => {})).toBeFalsy()
   })
 })

@@ -73,7 +73,6 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   serveLogger.debug('hasBackend', hasBackend)
   serveLogger.debug('hasFrontend', hasFrontend)
   serveLogger.debug('httpsSettings', JSON.stringify(httpsSettings, null, 2))
-  serveLogger.debug('actionConfig', JSON.stringify(actionConfig, null, 2))
 
   // set up environment variables for openwhisk
   process.env.__OW_API_KEY = process.env.AIO_RUNTIME_AUTH
@@ -285,7 +284,7 @@ async function invokeSequence ({ actionRequestContext, logger }) {
           __ow_headers: sequenceParams.__ow_headers,
           __ow_method: sequenceParams.__ow_method,
           ...action?.inputs,
-          ...(isObjectNotArray(lastActionResponse) ? lastActionResponse : {})
+          ...lastActionResponse
         }
 
     const context = { contextItem: action, actionName, contextItemParams: actionParams }
@@ -321,8 +320,15 @@ async function invokeAction ({ actionRequestContext, logger }) {
 
   // check if action is protected
   if (action?.annotations?.['require-adobe-auth']) {
+    // http header keys are case-insensitive
+    const owHeaders = Object.keys(params.__ow_headers ?? {})
+      .reduce((obj, header) => {
+        obj[header.toLowerCase()] = params.__ow_headers[header]
+        return obj
+      }, {})
+
     // check if user is authenticated
-    if (!params.__ow_headers?.authorization) {
+    if (!owHeaders?.authorization) {
       return {
         statusCode: 401,
         body: { error: 'cannot authorize request, reason: missing authorization header' }
@@ -367,10 +373,15 @@ async function invokeAction ({ actionRequestContext, logger }) {
         body = ''
       }
 
+      statusCode = statusCode || 200 // this is the OW default if omitted
+      body = body || ''
+      const isError = statusCode >= 400
+      const isObject = isObjectNotArray(response)
+
       return {
-        ...response, // pass all the other properties as well
+        ...(isObject && !isError ? response : {}), // pass all the other properties as well if an object, and not an error
         headers,
-        statusCode: statusCode || 200, // this is the OW default if omitted
+        statusCode,
         body
       }
     } catch (e) {

@@ -26,7 +26,9 @@ class BaseCommand extends Command {
   // default error handler for app commands
   async catch (error) {
     const { flags } = await this.parse(this.prototype)
-    aioLogger.error(error) // debug log
+    if (flags.verbose) {
+      aioLogger.error(error)
+    }
     this.handleError(error, flags.verbose)
   }
 
@@ -62,10 +64,10 @@ class BaseCommand extends Command {
       ret = flags.extension.reduce((obj, ef) => {
         const matching = Object.keys(all).filter(name => name.includes(ef))
         if (matching.length <= 0) {
-          throw new Error(`No matching extension implementation found for flag '-e ${ef}'`)
+          this.error(`No matching extension implementation found for flag '-e ${ef}'`)
         }
         if (matching.length > 1) {
-          throw new Error(`Flag '-e ${ef}' matches multiple extension implementation: '${matching}'`)
+          this.error(`Flag '-e ${ef}' matches multiple extension implementation: '${matching}'`)
         }
         const implName = matching[0]
         aioLogger.debug(`-e '${ef}' => '${implName}'`)
