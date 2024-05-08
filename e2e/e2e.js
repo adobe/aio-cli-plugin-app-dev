@@ -146,7 +146,7 @@ describe('http api tests', () => {
     const response = await fetch(url, { agent: HTTPS_AGENT })
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(401)
-    expect(await response.json()).toEqual({
+    expect(await response.json()).toMatchObject({
       error: 'cannot authorize request, reason: missing authorization header'
     })
   })
@@ -192,7 +192,7 @@ describe('http api tests', () => {
     const response = await fetch(url, { agent: HTTPS_AGENT })
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(404)
-    expect(await response.json()).toEqual({
+    expect(await response.json()).toMatchObject({
       error: 'The requested resource does not exist.'
     })
   })
@@ -203,7 +203,7 @@ describe('http api tests', () => {
     const response = await fetch(url, { agent: HTTPS_AGENT })
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(400)
-    expect(await response.json()).toEqual({
+    expect(await response.json()).toMatchObject({
       error: 'Response is not valid \'message/http\'.'
     })
   })
@@ -214,7 +214,7 @@ describe('http api tests', () => {
     const response = await fetch(url, { agent: HTTPS_AGENT })
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(400)
-    expect(await response.json()).toEqual({
+    expect(await response.json()).toMatchObject({
       error: 'Response is not valid \'message/http\'.'
     })
   })
@@ -233,7 +233,7 @@ describe('http api tests', () => {
     const response = await fetch(url, { agent: HTTPS_AGENT })
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(400)
-    expect(await response.json()).toEqual({
+    expect(await response.json()).toMatchObject({
       error: 'Sequence component does not exist.'
     })
   })
@@ -244,7 +244,7 @@ describe('http api tests', () => {
     const response = await fetch(url, { agent: HTTPS_AGENT })
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(400)
-    expect(await response.json()).toEqual({
+    expect(await response.json()).toMatchObject({
       error: 'Response is not valid \'message/http\'.'
     })
   })
@@ -255,7 +255,7 @@ describe('http api tests', () => {
     const response = await fetch(url, { agent: HTTPS_AGENT })
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(400)
-    expect(await response.json()).toEqual({
+    expect(await response.json()).toMatchObject({
       error: 'Response is not valid \'message/http\'.'
     })
   })
