@@ -31,9 +31,9 @@ async function addNumbers (params) {
     const nums = payload.split(',')
     const sum = nums.reduce((accum, num) => accum + parseInt(num.trim(), 10), 0)
     return {
-      statusCode: 200,
-      body: {
-        payload: sum
+      payload: sum, // to be passed to other actions in the sequence as part of params
+      body: { 
+        payload: sum // sent to the http client for a stand-alone call
       }
     }
   }

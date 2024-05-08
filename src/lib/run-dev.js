@@ -285,7 +285,7 @@ async function invokeSequence ({ actionRequestContext, logger }) {
           __ow_headers: sequenceParams.__ow_headers,
           __ow_method: sequenceParams.__ow_method,
           ...action?.inputs,
-          ...(isObjectNotArray(lastActionResponse.body) ? lastActionResponse.body : {})
+          ...(isObjectNotArray(lastActionResponse) ? lastActionResponse : {})
         }
 
     const context = { contextItem: action, actionName, contextItemParams: actionParams }
@@ -368,6 +368,7 @@ async function invokeAction ({ actionRequestContext, logger }) {
       }
 
       return {
+        ...response, // pass all the other properties as well
         headers,
         statusCode: statusCode || 200, // this is the OW default if omitted
         body
