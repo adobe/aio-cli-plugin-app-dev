@@ -23,7 +23,7 @@ async function addNumbers (params) {
       error: {
         statusCode: 400,
         body: {
-          error: 'payload parameter was not provided'
+          error: 'payload parameter was not provided (addNumbers)'
         }
       }
     }
