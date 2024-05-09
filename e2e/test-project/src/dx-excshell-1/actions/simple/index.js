@@ -10,10 +10,17 @@ OF ANY KIND, either express or implied. See the License for the specific languag
 governing permissions and limitations under the License.
 */
 
-/* eslint-disable no-unused-vars */
-const TheCommand = require('../../../src/commands/app/dev')
-const BaseCommand = require('../../../src/BaseCommand')
+/**
+ * The main function.
+ *
+ * @returns {object} runtime response object
+ */
+async function main () {
+  const response = {
+    statusCode: 200,
+    body: 'you were successful'
+  }
+  return response
+}
 
-test('TODO: completed at a future date', () => {
-  expect('TODO').toEqual('completed at a future date')
-})
+exports.main = main

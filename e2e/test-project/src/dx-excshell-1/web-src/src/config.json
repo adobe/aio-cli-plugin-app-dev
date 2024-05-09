@@ -1,0 +1,16 @@
+{
+  "dx-excshell-1/requireAdobeAuth": "https://localhost:9080/api/v1/web/dx-excshell-1/requireAdobeAuth",
+  "dx-excshell-1/noAdobeAuth": "https://localhost:9080/api/v1/web/dx-excshell-1/noAdobeAuth",
+  "dx-excshell-1/squareNumber": "https://localhost:9080/api/v1/web/dx-excshell-1/squareNumber",
+  "dx-excshell-1/addNumbers": "https://localhost:9080/api/v1/web/dx-excshell-1/addNumbers",
+  "dx-excshell-1/simpleAction": "https://localhost:9080/api/v1/web/dx-excshell-1/simpleAction",
+  "dx-excshell-1/noMainExport": "https://localhost:9080/api/v1/web/dx-excshell-1/noMainExport",
+  "dx-excshell-1/throwsError": "https://localhost:9080/api/v1/web/dx-excshell-1/throwsError",
+  "dx-excshell-1/noResponseObject": "https://localhost:9080/api/v1/web/dx-excshell-1/noResponseObject",
+  "dx-excshell-1/actionIsNonWeb": "https://localhost:9080/api/v1/dx-excshell-1/actionIsNonWeb",
+  "dx-excshell-1/nonWebSequence": "https://localhost:9080/api/v1/dx-excshell-1/nonWebSequence",
+  "dx-excshell-1/sequenceWithAllActionsAvailable": "https://localhost:9080/api/v1/web/dx-excshell-1/sequenceWithAllActionsAvailable",
+  "dx-excshell-1/sequenceWithActionThatThrowsError": "https://localhost:9080/api/v1/web/dx-excshell-1/sequenceWithActionThatThrowsError",
+  "dx-excshell-1/sequenceWithActionThatHasNoMainExport": "https://localhost:9080/api/v1/web/dx-excshell-1/sequenceWithActionThatHasNoMainExport",
+  "dx-excshell-1/addNumbersThenSquareIt": "https://localhost:9080/api/v1/web/dx-excshell-1/addNumbersThenSquareIt"
+}

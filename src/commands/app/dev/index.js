@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Adobe. All rights reserved.
+Copyright 2024 Adobe. All rights reserved.
 This file is licensed to you under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License. You may obtain a copy
 of the License at http://www.apache.org/licenses/LICENSE-2.0
@@ -11,23 +11,24 @@ governing permissions and limitations under the License.
 */
 
 const ora = require('ora')
-const chalk = require('chalk')
 const fs = require('fs-extra')
-const https = require('https')
+const https = require('node:https')
 const getPort = require('get-port')
 const open = require('open')
+const chalk = require('chalk')
 
 const { Flags, ux } = require('@oclif/core')
 const coreConfig = require('@adobe/aio-lib-core-config')
+const aioLogger = require('@adobe/aio-lib-core-logging')('@adobe/aio-cli-plugin-app-dev:index', { level: process.env.LOG_LEVEL, provider: 'winston' })
 
 const BaseCommand = require('../../../BaseCommand')
-const runDev = require('../../../lib/run-dev')
+const { runDev } = require('../../../lib/run-dev')
+const { runInProcess } = require('../../../lib/app-helper')
 
-const SERVER_DEFAULT_PORT = 9080
-const DEV_KEYS_DIR = 'dist/dev-keys/'
-const PRIVATE_KEY_PATH = 'dist/dev-keys/private.key'
-const PUB_CERT_PATH = 'dist/dev-keys/cert-pub.crt'
-const CONFIG_KEY = 'aio-dev.dev-keys'
+const APP_EVENT_PRE_APP_DEV = 'pre-app-dev'
+const APP_EVENT_POST_APP_DEV = 'post-app-dev'
+const { PUB_CERT_PATH, PRIVATE_KEY_PATH, DEV_KEYS_DIR, DEV_KEYS_CONFIG_KEY, SERVER_DEFAULT_PORT, DEV_API_WEB_PREFIX } = require('../../../lib/constants')
+const Cleanup = require('../../../lib/cleanup')
 
 class Dev extends BaseCommand {
   async run () {
@@ -37,15 +38,25 @@ class Dev extends BaseCommand {
 
     const runConfigs = await this.getAppExtConfigs(flags)
     const entries = Object.entries(runConfigs)
-    if (entries.length > 1) {
+    let entry = entries[0]
+
+    if (flags.extension) {
+      flags.extension.forEach((extName) => {
+        entry = entries.find(([entryName]) => entryName === extName)
+      })
+      if (!entry) {
+        this.error(`extension '${flags.extension}' was not found.`)
+      }
+    } else if (entries.length > 1) {
       this.error('Your app implements multiple extensions. You can only run one at the time, please select which extension to run with the \'-e\' flag.')
     }
-    const name = entries[0][0]
-    const config = entries[0][1]
 
+    const [name, config] = entry
     try {
+      // do some verification
+      await this.verifyActionConfig(config)
       // now we are good, either there is only 1 extension point or -e flag for one was provided
-      await this.runOneExtensionPoint(name, config, flags, spinner)
+      await this.runOneExtensionPoint(name, config, flags)
     } catch (error) {
       spinner.stop()
       // delegate to top handler
@@ -53,21 +64,78 @@ class Dev extends BaseCommand {
     }
   }
 
-  async runOneExtensionPoint (name, config, flags, spinner) {
-    console.log('runOneExtensionPoint called with', name, flags)
+  displayFrontendUrl (flags, frontendUrl) {
+    this.log(chalk.blue(chalk.bold(`To view your local application:\n  -> ${frontendUrl}`)))
+    const launchUrl = this.getLaunchUrlPrefix() + frontendUrl
+    if (flags.open) {
+      this.log(chalk.blue(chalk.bold(`Opening your deployed application in the Experience Cloud shell:\n  -> ${launchUrl}`)))
+      open(launchUrl)
+    } else {
+      this.log(chalk.blue(chalk.bold(`To view your deployed application in the Experience Cloud shell:\n  -> ${launchUrl}`)))
+    }
+  }
+
+  displayActionUrls (actionUrls) {
+    const blueBoldLog = (...args) => this.log(chalk.blue(chalk.bold(...args)))
+    const printUrl = (url) => blueBoldLog(`  -> ${url}`)
+
+    blueBoldLog('Your actions:')
+    const webActions = Object.values(actionUrls).filter(url => url.includes(DEV_API_WEB_PREFIX))
+    const nonWebActions = Object.keys(actionUrls).filter((key) => {
+      const url = actionUrls[key]
+      return !url.includes(DEV_API_WEB_PREFIX)
+    })
+
+    this.log('web actions:')
+    webActions.forEach(printUrl)
+    this.log('non-web actions:')
+    nonWebActions.forEach(printUrl)
+  }
+
+  /**
+   * Verifies the app config sequences and actions, based on criteria.
+   * 1. all actions in sequences must exist
+   *
+   * @param {object} config the config for the app
+   */
+  async verifyActionConfig (config) {
+    const actionConfig = config.manifest.full.packages
+
+    // 1. all actions in sequences must exist
+    Object.entries(actionConfig).forEach(([_, pkg]) => { // iterate through each package
+      const sequences = pkg?.sequences || {}
+      const actions = pkg?.actions || {}
+
+      Object.entries(sequences).forEach(([sequenceName, sequence]) => {
+        const sequenceActions = sequence?.actions?.split(',') || []
+        if (sequenceActions.length === 0) {
+          this.error(`Actions for the sequence '${sequenceName}' not provided.`)
+        }
+
+        sequenceActions
+          .map((a) => a.trim())
+          .forEach((actionName) => {
+            const action = actions[actionName]
+            if (!action) {
+              this.error(`Sequence component '${actionName}' does not exist (sequence = '${sequenceName}')`)
+            }
+          })
+      })
+    })
+  }
+
+  async runOneExtensionPoint (name, config, flags) {
+    aioLogger.debug('runOneExtensionPoint called with', name, flags)
 
     const hasBackend = config.app.hasBackend
     const hasFrontend = config.app.hasFrontend
 
     if (!hasBackend && !hasFrontend) {
-      this.error(new Error('nothing to run.. there is no frontend and no manifest.yml, are you in a valid app?'))
-    }
-    if (!flags.actions && !hasFrontend) {
-      this.error(new Error('nothing to run.. there is no frontend and --no-actions is set'))
+      this.error('nothing to run... there is no frontend and no manifest.yml, are you in a valid app?')
     }
 
     const runOptions = {
-      skipActions: false, // todo: remove these flags, they should always be false
+      skipActions: false,
       skipServe: false,
       parcel: {
         logLevel: flags.verbose ? 'verbose' : 'warn',
@@ -75,74 +143,69 @@ class Dev extends BaseCommand {
         shouldContentHash: false
       },
       fetchLogs: true,
-      isLocal: flags.local,
       verbose: flags.verbose
     }
 
-    // todo: fire pre hook
-    // try {
-    //   await runInProcess(config.hooks['pre-app-dev'], { config, options: runOptions })
-    // } catch (err) {
-    //   this.log(err)
-    // }
-
-    // check if there are certificates available, and generate them if not ...
-    // only care about certificates if the application has a UI
-    if (hasFrontend) {
-      try {
-        runOptions.parcel.https = await this.getOrGenerateCertificates()
-      } catch (error) {
-        this.error(error)
-      }
+    try {
+      await runInProcess(config.hooks[APP_EVENT_PRE_APP_DEV], { config, options: runOptions })
+    } catch (err) {
+      this.log(err)
     }
 
-    const onProgress = info => {
-      spinner.info(chalk.dim(`${info}`))
-      spinner.start()
+    // check if there are certificates available, and generate them if not
+    try {
+      runOptions.parcel.https = await this.getOrGenerateCertificates({
+        pubCertPath: PUB_CERT_PATH,
+        privateKeyPath: PRIVATE_KEY_PATH,
+        devKeysDir: DEV_KEYS_DIR,
+        devKeysConfigKey: DEV_KEYS_CONFIG_KEY
+      })
+    } catch (error) {
+      console.error(error)
+      this.error(error)
     }
+
     const inprocHook = this.config.runHook.bind(this.config)
-    const frontendUrl = await runDev(config, this.config.dataDir, runOptions, onProgress, inprocHook)
+    const cleanup = new Cleanup()
+    const { frontendUrl, actionUrls, serverCleanup } = await runDev(runOptions, config, inprocHook)
+    cleanup.add(() => serverCleanup(), 'cleaning up runDev...')
+    cleanup.wait()
 
-    // todo: fire post hook
-    // try {
-    //   await runInProcess(config.hooks['post-app-dev'], config)
-    // } catch (err) {
-    //   this.log(err)
-    // }
-
-    if (frontendUrl) {
-      this.log()
-      this.log(chalk.blue(chalk.bold(`To view your local application:\n  -> ${frontendUrl}`)))
-      const launchUrl = this.getLaunchUrlPrefix() + frontendUrl
-      if (flags.open) {
-        this.log(chalk.blue(chalk.bold(`Opening your deployed application in the Experience Cloud shell:\n  -> ${launchUrl}`)))
-        open(launchUrl)
-      } else {
-        this.log(chalk.blue(chalk.bold(`To view your deployed application in the Experience Cloud shell:\n  -> ${launchUrl}`)))
-      }
+    // fire post hook
+    try {
+      await runInProcess(config.hooks[APP_EVENT_POST_APP_DEV], config)
+    } catch (err) {
+      this.log(err)
     }
-    this.log('press CTRL+C to terminate dev environment')
+
+    if (hasFrontend) {
+      this.displayFrontendUrl(flags, frontendUrl)
+    }
+    if (hasBackend) {
+      this.displayActionUrls(actionUrls)
+    }
+    this.log('press CTRL+C to terminate the dev environment')
   }
 
-  async getOrGenerateCertificates () {
+  async getOrGenerateCertificates ({ pubCertPath, privateKeyPath, devKeysDir, devKeysConfigKey, maxWaitTimeSeconds = 20 }) {
     const certs = {
-      cert: PUB_CERT_PATH, // Path to custom certificate
-      key: PRIVATE_KEY_PATH // Path to custom key
+      cert: pubCertPath, // Path to custom certificate
+      key: privateKeyPath // Path to custom key
     }
 
     /* get existing certificates from file.. */
-    if (fs.existsSync(PRIVATE_KEY_PATH) && fs.existsSync(PUB_CERT_PATH)) {
+    if (fs.existsSync(privateKeyPath) && fs.existsSync(pubCertPath)) {
       return certs
     }
 
-    await fs.ensureDir(DEV_KEYS_DIR)
+    await fs.ensureDir(devKeysDir)
 
     /* or get existing certificates from config.. */
-    const devConfig = coreConfig.get(CONFIG_KEY)
-    if (devConfig && devConfig.privateKey && devConfig.publicCert) {
+    const devConfig = coreConfig.get(devKeysConfigKey)
+    if (devConfig?.privateKey && devConfig?.publicCert) {
       // yes? write them to file
-      await fs.writeFile(PRIVATE_KEY_PATH, devConfig.privateKey)
-      await fs.writeFile(PUB_CERT_PATH, devConfig.publicCert)
+      await fs.writeFile(privateKeyPath, devConfig.privateKey)
+      await fs.writeFile(pubCertPath, devConfig.publicCert)
 
       return certs
     }
@@ -152,43 +215,48 @@ class Dev extends BaseCommand {
     const CertCmd = this.config.findCommand('certificate:generate')
     if (CertCmd) {
       const Instance = await CertCmd.load()
-      await Instance.run([`--keyout=${PRIVATE_KEY_PATH}`, `--out=${PUB_CERT_PATH}`, '-n=DeveloperSelfSigned.cert'])
+      await Instance.run([`--keyout=${privateKeyPath}`, `--out=${pubCertPath}`, '-n=DeveloperSelfSigned.cert'])
     } else {
       // could not find the cert command, error is caught below
       throw new Error('error while generating certificate - no certificate:generate command found')
     }
 
     // 2. store them globally in config
-    const privateKey = (await fs.readFile(PRIVATE_KEY_PATH)).toString()
-    const publicCert = (await fs.readFile(PUB_CERT_PATH)).toString()
-    coreConfig.set(CONFIG_KEY + '.privateKey', privateKey)
-    coreConfig.set(CONFIG_KEY + '.publicCert', publicCert)
+    const privateKey = (await fs.readFile(privateKeyPath, { encoding: 'utf8' }))
+    const publicCert = (await fs.readFile(pubCertPath), { encoding: 'utf8' })
+    coreConfig.set(`${devKeysConfigKey}.privateKey`, privateKey)
+    coreConfig.set(`${devKeysConfigKey}.publicCert`, publicCert)
 
     // 3. ask the developer to accept them
     let certAccepted = false
     const startTime = Date.now()
-    const server = https.createServer({ key: privateKey, cert: publicCert }, function (req, res) {
+
+    const server = https.createServer({ key: privateKey, cert: publicCert }, (_, res) => {
       certAccepted = true
       res.writeHead(200)
       res.end('Congrats, you have accepted the certificate and can now use it for development on this machine.\n' +
       'You can close this window.')
     })
+
     const port = parseInt(process.env.PORT) || SERVER_DEFAULT_PORT
     const actualPort = await getPort({ port })
     server.listen(actualPort)
     this.log('A self signed development certificate has been generated, you will need to accept it in your browser in order to use it.')
     open(`https://localhost:${actualPort}`)
     ux.action.start('Waiting for the certificate to be accepted.')
+
     // eslint-disable-next-line no-unmodified-loop-condition
-    while (!certAccepted && Date.now() - startTime < 20000) {
-      await ux.wait()
+    while (!certAccepted && (Date.now() - startTime) < (maxWaitTimeSeconds * 1000)) {
+      await new Promise(resolve => setTimeout(resolve, 1000)) // wait for 1 second
     }
+
     if (certAccepted) {
       ux.action.stop()
       this.log('Great, you accepted the certificate!')
     } else {
       ux.action.stop('timed out')
     }
+
     server.close()
     return certs
   }
@@ -208,10 +276,9 @@ Dev.flags = {
   extension: Flags.string({
     description: 'Run only a specific extension, this flag can only be specified once',
     char: 'e',
+    parse: (str) => [str],
     // we do not support multiple yet
-    multiple: false,
-    // not multiple but treat it as array for logic reuse
-    parse: str => [str]
+    multiple: false
   })
 }
 

@@ -1,0 +1,100 @@
+operations:
+  view:
+    - type: web
+      impl: index.html
+actions: actions
+web: web-src
+runtimeManifest:
+  packages:
+    dx-excshell-1:
+      license: Apache-2.0
+      sequences:
+        nonWebSequence:
+          actions: noAdobeAuth, simpleAction
+          web: false
+        sequenceWithAllActionsAvailable:
+          actions: noAdobeAuth, simpleAction
+          web: true
+        sequenceWithActionThatThrowsError:
+          actions: noAdobeAuth, throwsError, simpleAction
+          web: true
+        sequenceWithActionThatHasNoMainExport:
+          actions: noAdobeAuth, noMainExport, simpleAction
+          web: true
+        addNumbersThenSquareIt:
+          actions: addNumbers, squareNumber
+          web: true
+      actions:
+        requireAdobeAuth:
+          function: actions/simple/index.js
+          web: 'yes'
+          runtime: nodejs:18
+          inputs:
+            LOG_LEVEL: debug
+          annotations:
+            require-adobe-auth: true
+            final: true
+        noAdobeAuth:
+          function: actions/simple/index.js
+          web: 'yes'
+          runtime: nodejs:18
+          inputs:
+            LOG_LEVEL: debug
+          annotations:
+            final: true
+        squareNumber:
+          function: actions/squareNumber/index.js
+          web: 'yes'
+          runtime: nodejs:18
+          inputs:
+            LOG_LEVEL: debug
+          annotations:
+            final: true
+        addNumbers:
+          function: actions/addNumbers/index.js
+          web: 'yes'
+          runtime: nodejs:18
+          inputs:
+            LOG_LEVEL: debug
+          annotations:
+            final: true
+        simpleAction:
+          function: actions/simple/index.js
+          web: 'yes'
+          runtime: nodejs:18
+          inputs:
+            LOG_LEVEL: debug
+          annotations:
+            final: true
+        noMainExport:
+          function: actions/noMainExport/index.js
+          web: 'yes'
+          runtime: nodejs:18
+          inputs:
+            LOG_LEVEL: debug
+          annotations:
+            final: true
+        throwsError:
+          function: actions/throwsError/index.js
+          web: 'yes'
+          runtime: nodejs:18
+          inputs:
+            LOG_LEVEL: debug
+          annotations:
+            final: true
+        noResponseObject:
+          function: actions/noResponseObject/index.js
+          web: 'yes'
+          runtime: nodejs:18
+          inputs:
+            LOG_LEVEL: debug
+          annotations:
+            final: true
+        actionIsNonWeb:
+          function: actions/simple/index.js
+          web: false
+          runtime: nodejs:18
+          inputs:
+            LOG_LEVEL: debug
+          annotations:
+            final: true

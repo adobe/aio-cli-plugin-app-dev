@@ -12,13 +12,10 @@ governing permissions and limitations under the License.
 const { Command, Flags } = require('@oclif/core')
 const chalk = require('chalk')
 const coreConfig = require('@adobe/aio-lib-core-config')
-const DEFAULT_LAUNCH_PREFIX = 'https://experience.adobe.com/?devMode=true#/custom-apps/?localDevUrl='
-const STAGE_LAUNCH_PREFIX = 'https://experience-stage.adobe.com/?devMode=true#/custom-apps/?localDevUrl='
-const configLoader = require('@adobe/aio-cli-lib-app-config')
-const APPLICATION_CONFIG_KEY = 'application'
-const EXTENSIONS_CONFIG_KEY = 'extensions'
+const appConfig = require('@adobe/aio-cli-lib-app-config')
 const inquirer = require('inquirer')
 const aioLogger = require('@adobe/aio-lib-core-logging')('@adobe/aio-cli-plugin-app-dev', { level: process.env.LOG_LEVEL, provider: 'winston' })
+const { DEFAULT_LAUNCH_PREFIX, STAGE_LAUNCH_PREFIX } = require('./lib/constants')
 
 const {
   getCliEnv, /* function */
@@ -29,7 +26,9 @@ class BaseCommand extends Command {
   // default error handler for app commands
   async catch (error) {
     const { flags } = await this.parse(this.prototype)
-    aioLogger.error(error) // debug log
+    if (flags.verbose) {
+      aioLogger.error(error)
+    }
     this.handleError(error, flags.verbose)
   }
 
@@ -65,10 +64,10 @@ class BaseCommand extends Command {
       ret = flags.extension.reduce((obj, ef) => {
         const matching = Object.keys(all).filter(name => name.includes(ef))
         if (matching.length <= 0) {
-          throw new Error(`No matching extension implementation found for flag '-e ${ef}'`)
+          this.error(`No matching extension implementation found for flag '-e ${ef}'`)
         }
         if (matching.length > 1) {
-          throw new Error(`Flag '-e ${ef}' matches multiple extension implementation: '${matching}'`)
+          this.error(`Flag '-e ${ef}' matches multiple extension implementation: '${matching}'`)
         }
         const implName = matching[0]
         aioLogger.debug(`-e '${ef}' => '${implName}'`)
@@ -84,25 +83,9 @@ class BaseCommand extends Command {
     return ret
   }
 
-  getRuntimeManifestConfigFile (implName) {
-    let configKey
-    if (implName === APPLICATION_CONFIG_KEY) {
-      configKey = APPLICATION_CONFIG_KEY
-    } else {
-      configKey = `${EXTENSIONS_CONFIG_KEY}.${implName}`
-    }
-    let configData = this.getConfigFileForKey(`${configKey}.runtimeManifest`)
-    if (!configData.file) {
-      // first action manifest is not defined
-      configData = this.getConfigFileForKey(`${configKey}`)
-      configData.key = configData.key + '.runtimeManifest'
-    }
-    return configData
-  }
-
-  getConfigFileForKey (fullKey) {
+  async getConfigFileForKey (fullKey) {
     // NOTE: the index returns undefined if the key is loaded from a legacy configuration file
-    const fullConfig = this.getFullConfig()
+    const fullConfig = await this.getFullConfig()
     // full key like 'extensions.dx/excshell/1.runtimeManifest'
     // returns { key: relKey, file: configFile}
     const configData = fullConfig.includeIndex[fullKey]
@@ -115,8 +98,12 @@ class BaseCommand extends Command {
   }
 
   async getFullConfig (options = {}) {
+    // validate appConfig defaults to false for now
+    const validateAppConfig = options.validateAppConfig === true
+
     if (!this.appConfig) {
-      this.appConfig = await configLoader.load(options)
+      // this will explicitly set validateAppConfig=false if not set
+      this.appConfig = await appConfig.load({ ...options, validateAppConfig })
     }
     return this.appConfig
   }
@@ -139,18 +126,6 @@ class BaseCommand extends Command {
     const defaultLaunchPrefix = getCliEnv() === STAGE_ENV ? STAGE_LAUNCH_PREFIX : DEFAULT_LAUNCH_PREFIX
     return (launchPrefix || defaultLaunchPrefix)
   }
-
-  get pjson () {
-    return this.config.pjson
-  }
-
-  get appName () {
-    return this.pjson.name
-  }
-
-  get appVersion () {
-    return this.pjson.version
-  }
 }
 
 BaseCommand.flags = {
@@ -158,6 +133,6 @@ BaseCommand.flags = {
   version: Flags.boolean({ description: 'Show version' })
 }
 
-BaseCommand.args = []
+BaseCommand.args = {}
 
 module.exports = BaseCommand

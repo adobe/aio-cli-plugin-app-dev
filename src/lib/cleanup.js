@@ -10,7 +10,6 @@ OF ANY KIND, either express or implied. See the License for the specific languag
 governing permissions and limitations under the License.
 */
 
-const execa = require('execa')
 const aioLogger = require('@adobe/aio-lib-core-logging')('@adobe/aio-cli-plugin-app-dev:cleanup', { level: process.env.LOG_LEVEL, provider: 'winston' })
 
 /** @private */
@@ -27,19 +26,10 @@ class Cleanup {
   }
 
   async wait () {
-    /*
-      todo: optimization here to only add the dummyProc if there are no other cleanup functions to wait for.
-      currently tests are dependent on the execa('node') being called
-    */
-    // if (this.resources.length < 1) {
-    const dummyProc = execa('node')
-    this.add(async () => await dummyProc.kill(), 'stopping sigint waiter...')
-    // }
-    // bind cleanup function
     process.on('SIGINT', async () => {
       try {
         await this.run()
-        aioLogger.info('exiting!')
+        aioLogger.debug('exiting!')
         process.exit(0) // eslint-disable-line no-process-exit
       } catch (e) {
         aioLogger.error('unexpected error while cleaning up!')

@@ -14,9 +14,30 @@ const fs = require('fs-extra')
 const path = require('node:path')
 const aioLogger = require('@adobe/aio-lib-core-logging')('@adobe/aio-cli-plugin-app-dev:lib-app-helper', { level: process.env.LOG_LEVEL, provider: 'winston' })
 
+// eslint-disable-next-line jsdoc/require-property
 /**
- * @typedef ChildProcess
+ * @typedef {object} ChildProcess
  */
+
+/**
+ * @param {string} hookPath to be require()'d and run. Should export an async function that takes a config object as its only argument
+ * @param {object} config which will be passed to the hook
+ * @returns {Promise<*>} whatever the hook returns
+ */
+async function runInProcess (hookPath, config) {
+  if (hookPath) {
+    try {
+      const hook = require(path.resolve(hookPath))
+      aioLogger.debug('runInProcess: running project hook in process')
+      return hook(config)
+    } catch (e) {
+      aioLogger.debug('runInProcess: error running project hook in process, running as package script instead')
+      return runScript(hookPath)
+    }
+  } else {
+    aioLogger.debug('runInProcess: undefined hookPath')
+  }
+}
 
 /**
  * Runs a package script in a child process
@@ -86,6 +107,7 @@ function writeConfig (file, config) {
 }
 
 module.exports = {
+  runInProcess,
   runScript,
   writeConfig
 }

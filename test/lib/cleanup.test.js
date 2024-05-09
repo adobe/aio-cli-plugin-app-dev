@@ -1,0 +1,101 @@
+/*
+Copyright 2024 Adobe. All rights reserved.
+This file is licensed to you under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License. You may obtain a copy
+of the License at http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed under
+the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR REPRESENTATIONS
+OF ANY KIND, either express or implied. See the License for the specific language
+governing permissions and limitations under the License.
+*/
+
+const Cleanup = require('../../src/lib/cleanup')
+
+process.exit = jest.fn()
+process.on = jest.fn()
+
+let theCleanup
+
+beforeEach(() => {
+  theCleanup = new Cleanup()
+  process.exit.mockReset()
+  process.on.mockReset()
+})
+
+test('exports', () => {
+  expect(typeof Cleanup).toEqual('function')
+  expect(typeof Cleanup.prototype.add).toEqual('function')
+  expect(typeof Cleanup.prototype.run).toEqual('function')
+  expect(typeof Cleanup.prototype.wait).toEqual('function')
+})
+
+test('add', () => {
+  const fn1 = jest.fn()
+  const fn2 = jest.fn()
+
+  expect(theCleanup.resources.length).toEqual(0)
+  theCleanup.add(fn1, 'fn1')
+  theCleanup.add(fn2, 'fn2')
+  expect(theCleanup.resources.length).toEqual(2)
+})
+
+test('run', async () => {
+  const fn1 = jest.fn()
+  const fn2 = jest.fn()
+
+  theCleanup.add(fn1, 'fn1')
+  theCleanup.add(fn2, 'fn2')
+  await theCleanup.run()
+
+  expect(fn1).toHaveBeenCalled()
+  expect(fn2).toHaveBeenCalled()
+})
+
+test('wait (cleanup no errors)', async () => {
+  const fn1 = jest.fn()
+  const fn2 = jest.fn()
+
+  process.exit.mockImplementation((code) => {
+    expect(code).toEqual(0) // ok
+  })
+
+  process.on.mockImplementation(async (eventName, fn) => {
+    // it shouldn't have any other events anyway during the test
+    expect(eventName === 'SIGINT').toBeTruthy()
+    // call the fn immediately as if SIGINT was sent
+    await fn()
+
+    expect(fn1).toHaveBeenCalled()
+    expect(fn2).toHaveBeenCalled()
+  })
+
+  theCleanup.add(fn1, 'fn1')
+  theCleanup.add(fn2, 'fn2')
+  await theCleanup.wait()
+})
+
+test('wait (cleanup has error)', async () => {
+  const fn1 = jest.fn()
+  const fn2 = jest.fn(() => {
+    throw new Error('error')
+  })
+
+  process.exit.mockImplementation((code) => {
+    expect(code).toEqual(1) // error
+  })
+
+  process.on.mockImplementation(async (eventName, fn) => {
+    // it shouldn't have any other events anyway during the test
+    expect(eventName === 'SIGINT').toBeTruthy()
+    // call the fn immediately as if SIGINT was sent
+    await fn()
+
+    expect(fn1).toHaveBeenCalled()
+    expect(fn2).toHaveBeenCalled()
+  })
+
+  theCleanup.add(fn1, 'fn1')
+  theCleanup.add(fn2, 'fn2')
+  await theCleanup.wait()
+})
