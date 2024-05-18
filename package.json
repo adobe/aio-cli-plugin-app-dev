@@ -48,7 +48,8 @@
     "eslint-plugin-promise": "^6.1.1",
     "jest": "^29",
     "oclif": "^3.2.0",
-    "stdout-stderr": "^0.1.13"
+    "stdout-stderr": "^0.1.13",
+    "tree-kill": "^1.2.2"
   },
   "engines": {
     "node": ">=18"
@@ -76,6 +77,6 @@
     "prepack": "oclif manifest && oclif readme --no-aliases",
     "postpack": "rm -f oclif.manifest.json",
     "version": "oclif readme && git add README.md",
-    "e2e": "jest --collectCoverage=false --testRegex './e2e/e2e.js'"
+    "e2e": "jest --detectOpenHandles -c e2e/jest.e2e.config.js"
   }
 }
