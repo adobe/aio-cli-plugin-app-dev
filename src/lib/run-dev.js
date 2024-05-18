@@ -189,7 +189,7 @@ async function runDev (runOptions, config, _inprocHookRunner) {
 
   const serverCleanup = async () => {
     serveLogger.debug('shutting down http server ...')
-    await server.close()
+    await server?.close()
     serveLogger.debug('removing parcel watcher ...')
     await subscription?.unsubscribe()
   }
