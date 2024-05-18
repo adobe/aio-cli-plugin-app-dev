@@ -139,6 +139,7 @@ describe('run', () => {
       }),
       dataDir: '/data/dir'
     }
+    command.config.runHook.mockResolvedValue({})
     command.appConfig = cloneDeep(mockConfigData)
     command.getAppExtConfigs = jest.fn()
     command.getLaunchUrlPrefix = jest.fn(() => 'https://my.launch.prefix/?localDevUrl=')
