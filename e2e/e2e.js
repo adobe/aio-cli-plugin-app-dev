@@ -17,6 +17,7 @@ const { createFetch } = require('@adobe/aio-lib-core-networking')
 const fetch = createFetch()
 const https = require('node:https')
 const { DEV_API_PREFIX, DEV_API_WEB_PREFIX } = require('../src/lib/constants')
+const treeKill = require('tree-kill')
 
 jest.unmock('execa')
 jest.setTimeout(30000)
@@ -126,9 +127,9 @@ describe('http api tests', () => {
 
   afterAll(() => {
     if (E2E_CDN_HOST === 'localhost') {
-      console.log(`killed server at port ${E2E_PORT}:`, serverProcess?.kill?.('SIGTERM', {
-        forceKillAfterTimeout: 2000
-      }))
+      // we use tree-kill to solve the issue on Windows where grand-child processes are not killed (via node's child_process)
+      // the module uses OS specific processes to find all related pids and kill them
+      return new Promise((resolve) => treeKill(serverProcess.pid, 'SIGTERM', resolve))
     }
   })
 
