@@ -16,7 +16,6 @@
     "@adobe/aio-lib-runtime": "^6",
     "@adobe/aio-lib-web": "^7",
     "@oclif/core": "^3",
-    "@parcel/reporter-cli": "^2.7.0",
     "chalk": "^4",
     "connect-livereload": "^0.6.1",
     "execa": "^5.0.0",
@@ -28,9 +27,7 @@
     "livereload": "^0.9.3",
     "lodash.clonedeep": "^4.5.0",
     "open": "^8.4.2",
-    "ora": "^5",
-    "yeoman-environment": "^3",
-    "yeoman-generator": "^5"
+    "ora": "^5"
   },
   "devDependencies": {
     "@adobe/aio-lib-core-networking": "^5",
@@ -38,7 +35,6 @@
     "dotenv": "^16.4.5",
     "eol": "^0.9.1",
     "eslint": "^8.57.0",
-    "eslint-config-oclif": "^5.2.0",
     "eslint-config-standard": "^17.1.0",
     "eslint-plugin-import": "^2.29.1",
     "eslint-plugin-jest": "^27.9.0",
