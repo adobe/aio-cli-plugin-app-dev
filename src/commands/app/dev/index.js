@@ -95,7 +95,7 @@ class Dev extends BaseCommand {
   /**
    * Verifies the app config sequences and actions, based on criteria.
    * 1. all actions in sequences must exist
-   * 2. a sequence cannot have the same name as an action (ACNA-2967)
+   * 2. a sequence cannot have the same name as an action
    *
    * @param {object} config the config for the app
    */
