@@ -467,11 +467,6 @@ async function serveWebAction (req, res, actionConfig) {
 
   let invoker, contextItem
 
-  // NOTE:
-  // Currently aio-cli deploying to Adobe Runtime allows you to deploy web sequences and web actions with the same name.
-  // The url that is generated for both are the *same*, but the action implementation is lost, since the sequence deploy will supercede it.
-  // We reflect the bug behavior here unless the implementation changes in the future.
-  // See https://github.com/adobe/aio-cli/issues/614
   if (sequence) {
     invoker = invokeSequence
     contextItem = sequence

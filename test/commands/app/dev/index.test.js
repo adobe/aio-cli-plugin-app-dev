@@ -568,4 +568,29 @@ describe('verifyActionConfig', () => {
     await command.verifyActionConfig(appConfig)
     expect(command.error).toHaveBeenCalledWith(`Sequence component '${missingAction}' does not exist (sequence = '${sequenceName}')`)
   })
+
+  test('sequence with same name as action', async () => {
+    const sequenceName = 'myname'
+    const actionName = sequenceName
+
+    const actionConfig = {
+      mypackage: {
+        sequences: {
+          [sequenceName]: {
+            actions: 'a'
+          }
+        },
+        actions: {
+          a: {},
+          [actionName]: {}
+        }
+      }
+    }
+    const appConfig = {
+      manifest: { full: { packages: actionConfig } }
+    }
+
+    await command.verifyActionConfig(appConfig)
+    expect(command.error).toHaveBeenCalledWith(`Sequence '${sequenceName}' is already defined as an action under the same package. Actions and sequences can not have the same name in a single package.`)
+  })
 })
