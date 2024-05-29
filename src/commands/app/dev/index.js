@@ -95,11 +95,13 @@ class Dev extends BaseCommand {
   /**
    * Verifies the app config sequences and actions, based on criteria.
    * 1. all actions in sequences must exist
+   * 2. a sequence cannot have the same name as an action
    *
    * @param {object} config the config for the app
    */
   async verifyActionConfig (config) {
     const actionConfig = config.manifest.full.packages
+    const errors = []
 
     // 1. all actions in sequences must exist
     Object.entries(actionConfig).forEach(([_, pkg]) => { // iterate through each package
@@ -112,16 +114,26 @@ class Dev extends BaseCommand {
           this.error(`Actions for the sequence '${sequenceName}' not provided.`)
         }
 
+        const actionExistsWithSequenceName = actions[sequenceName]
+        if (actionExistsWithSequenceName) {
+          errors.push(`Sequence '${sequenceName}' is already defined as an action under the same package. Actions and sequences can not have the same name in a single package.`)
+          return
+        }
+
         sequenceActions
           .map((a) => a.trim())
           .forEach((actionName) => {
             const action = actions[actionName]
             if (!action) {
-              this.error(`Sequence component '${actionName}' does not exist (sequence = '${sequenceName}')`)
+              errors.push(`Sequence component '${actionName}' does not exist (sequence = '${sequenceName}')`)
             }
           })
       })
     })
+
+    if (errors.length) {
+      this.error(errors.join('\n'))
+    }
   }
 
   async runOneExtensionPoint (name, config, flags) {

@@ -10,6 +10,7 @@ OF ANY KIND, either express or implied. See the License for the specific languag
 governing permissions and limitations under the License.
 */
 
+const { SERVER_DEFAULT_PORT } = require('../../src/lib/constants')
 const mockExpress = require('express')
 const mockLogger = require('@adobe/aio-lib-core-logging')
 const mockLibWeb = require('@adobe/aio-lib-web')
@@ -769,6 +770,9 @@ describe('runDev', () => {
       expect(frontendUrl).toBeDefined()
       expect(new URL(frontendUrl).protocol).toEqual('https:')
       expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
+      // this next test is important: this is how VS Code debug launch configuration reads the port, from the log
+      // see: https://github.com/adobe/generator-aio-app/blob/master/test/__fixtures__/add-vscode-config/launch.json
+      expect(mockLogger.info).toHaveBeenCalledWith('server running on port : ', SERVER_DEFAULT_PORT)
     }
 
     // 1. run options *not* https
