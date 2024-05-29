@@ -16,7 +16,7 @@ const mockLogger = require('@adobe/aio-lib-core-logging')
 const mockLibWeb = require('@adobe/aio-lib-web')
 const mockGetPort = require('get-port')
 const {
-  runDev, serveWebAction, serveNonWebAction, httpStatusResponse, isObjectNotArray,
+  runDev, serveWebAction, serveNonWebAction, httpStatusResponse,
   invokeAction, invokeSequence, statusCodeMessage, isRawWebAction, isWebAction
 } = require('../../src/lib/run-dev')
 
@@ -153,7 +153,6 @@ test('exports', () => {
   expect(invokeSequence).toBeDefined()
   expect(isRawWebAction).toBeDefined()
   expect(isWebAction).toBeDefined()
-  expect(isObjectNotArray).toBeDefined()
   expect(statusCodeMessage).toBeDefined()
 })
 
@@ -1046,23 +1045,5 @@ describe('invokeAction', () => {
     const actionRequestContext = { contextItem: action, contextItemParams: actionParams, contextItemName: actionName, packageName, actionConfig }
     const response = await invokeAction({ actionRequestContext, logger: mockLogger })
     expect(response).toEqual({ body: { error: 'something wrong happened here' }, statusCode: 403 })
-  })
-})
-
-describe('isObjectNotArray', () => {
-  test('array should be false', () => {
-    expect(isObjectNotArray(['a', 'b', 'c'])).toBeFalsy()
-  })
-
-  test('object literal should be true', () => {
-    expect(isObjectNotArray({ some: 'object' })).toBeTruthy()
-  })
-
-  test('string should be false', () => {
-    expect(isObjectNotArray('some string')).toBeFalsy()
-  })
-
-  test('function should be false', () => {
-    expect(isObjectNotArray(() => {})).toBeFalsy()
   })
 })
