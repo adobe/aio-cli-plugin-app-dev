@@ -340,7 +340,16 @@ async function invokeAction ({ actionRequestContext, logger }) {
   // generate an activationID just like openwhisk
   process.env.__OW_ACTIVATION_ID = crypto.randomBytes(16).toString('hex')
   delete require.cache[action.function]
-  const actionFunction = require(action.function)?.main
+  let actionFunction
+  // catch errors when loading the action function
+  try {
+    actionFunction = require(action.function)?.main
+  } catch (e) {
+    return {
+      statusCode: 400,
+      body: { error: 'Error loading action function: ' + e.message }
+    }
+  }
 
   if (actionFunction) {
     try {
@@ -396,6 +405,7 @@ async function invokeAction ({ actionRequestContext, logger }) {
       }
     }
   } else {
+    // this case the action returned an error object, so we should use it
     const statusCode = 400
     logger.error(`${actionName} action not found, or does not export main`)
     const body = { error: 'Response is not valid \'message/http\'.' }

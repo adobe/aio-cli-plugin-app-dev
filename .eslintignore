@@ -1,1 +1,2 @@
 e2e/test-project
+test/__fixtures__/actions/syntaxErrorAction.js

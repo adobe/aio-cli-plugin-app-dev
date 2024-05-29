@@ -1043,6 +1043,24 @@ describe('invokeAction', () => {
     const response = await invokeAction({ actionRequestContext, logger: mockLogger })
     expect(response).toEqual({ body: { error: 'something wrong happened here' }, statusCode: 403 })
   })
+
+  test('error action cannot load action (400)', async () => {
+    const packageName = 'foo'
+    const action = { function: fixturePath('actions/syntaxErrorAction.js') }
+    const actionParams = {}
+    const actionName = 'a'
+    const actionConfig = {
+      [packageName]: {
+        actions: {
+          [actionName]: action
+        }
+      }
+    }
+
+    const actionRequestContext = { contextItem: action, contextItemParams: actionParams, contextItemName: actionName, packageName, actionConfig }
+    const response = await invokeAction({ actionRequestContext, logger: mockLogger })
+    expect(response).toMatchObject({ body: { error: expect.stringMatching('Error loading action function:') }, statusCode: 400 })
+  })
 })
 
 describe('isObjectNotArray', () => {
