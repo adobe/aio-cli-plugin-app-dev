@@ -27,7 +27,7 @@
     "livereload": "^0.9.3",
     "lodash.clonedeep": "^4.5.0",
     "open": "^8.4.2",
-    "ora": "^5"
+    "ora": "^8"
   },
   "devDependencies": {
     "@adobe/aio-lib-core-networking": "^5",
