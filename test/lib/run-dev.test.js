@@ -16,7 +16,7 @@ const mockLogger = require('@adobe/aio-lib-core-logging')
 const mockLibWeb = require('@adobe/aio-lib-web')
 const mockGetPort = require('get-port')
 const {
-  runDev, serveWebAction, serveNonWebAction, httpStatusResponse, isObjectNotArray,
+  runDev, serveWebAction, httpStatusResponse, isObjectNotArray,
   invokeAction, invokeSequence, statusCodeMessage, isRawWebAction, isWebAction
 } = require('../../src/lib/run-dev')
 
@@ -147,7 +147,7 @@ beforeEach(() => {
 test('exports', () => {
   expect(runDev).toBeDefined()
   expect(serveWebAction).toBeDefined()
-  expect(serveNonWebAction).toBeDefined()
+  // expect(serveNonWebAction).toBeDefined()
   expect(httpStatusResponse).toBeDefined()
   expect(invokeAction).toBeDefined()
   expect(invokeSequence).toBeDefined()
@@ -339,17 +339,6 @@ describe('httpStatusResponse', () => {
   })
 })
 
-test('serveNonWebAction', () => {
-  const mockStatus = jest.fn()
-  const mockSend = jest.fn()
-  const res = createRes({ mockStatus, mockSend })
-  const req = createReq({ url: 'foo/bar' })
-
-  serveNonWebAction(req, res)
-  expect(mockStatus).toHaveBeenCalledWith(401)
-  expect(mockSend).toHaveBeenCalledWith({ error: 'The resource requires authentication, which was not supplied with the request' })
-})
-
 describe('serveWebAction', () => {
   test('action found, not web action', async () => {
     const mockStatus = jest.fn()
@@ -371,7 +360,8 @@ describe('serveWebAction', () => {
 
     await serveWebAction(req, res, actionConfig)
     expect(mockSend).toHaveBeenCalledTimes(1)
-    expect(mockStatus).toHaveBeenCalledWith(404)
+    expect(mockStatus).toHaveBeenCalledWith(204)
+    expect(mockLogger.warn).toHaveBeenCalledWith('serving non-web action : this call will fail if deployed.')
   })
 
   test('action found, is web action', async () => {
@@ -431,10 +421,9 @@ describe('serveWebAction', () => {
 
     const res = createRes({ mockStatus, mockSend })
     const req = createReq({ url: 'foo/mysequence', is })
-    const packageName = 'foo'
 
     const actionConfig = {
-      [packageName]: {
+      foo: {
         sequences: {
           mysequence: {
             actions: 'bar'
@@ -450,8 +439,9 @@ describe('serveWebAction', () => {
 
     await serveWebAction(req, res, actionConfig)
     expect(mockSend).toHaveBeenCalledTimes(1)
-    expect(mockSend).toHaveBeenCalledWith({ error: 'The requested resource does not exist.' })
-    expect(mockStatus).toHaveBeenCalledWith(404)
+    expect(mockSend).toHaveBeenCalledWith('')
+    expect(mockStatus).toHaveBeenCalledWith(204)
+    expect(mockLogger.warn).toHaveBeenCalledWith('serving non-web action : this call will fail if deployed.')
   })
 
   test('action not found, is not sequence', async () => {

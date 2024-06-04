@@ -172,7 +172,7 @@ async function runDev (runOptions, config, _inprocHookRunner) {
 
   // serveAction needs to clear cache for each request, so we get live changes
   app.all(`/${DEV_API_WEB_PREFIX}/*`, (req, res) => serveWebAction(req, res, actionConfig))
-  app.all(`/${DEV_API_PREFIX}/*`, (req, res) => serveNonWebAction(req, res, actionConfig))
+  app.all(`/${DEV_API_PREFIX}/*`, (req, res) => serveWebAction(req, res, actionConfig))
 
   const server = https.createServer(serverOptions, app)
   server.listen(serverPort, () => {
@@ -238,24 +238,6 @@ function isRawWebAction (action) {
   const webValue = action?.web
 
   return (webExportValue === raw || webValue === raw)
-}
-
-/**
- * Express path handler to handle non-web action or non-web sequence API calls.
- * Openwhisk returns 401 when you call a non-web action or non-web sequence via HTTP.
- *
- * @param {Request} req the http request
- * @param {Response} res the http response
- * @param {object} actionConfig the action configuration
- * @returns {void}
- */
-async function serveNonWebAction (req, res, actionConfig) {
-  const url = req.params[0]
-  const [, actionName] = url.split('/')
-  const logger = coreLogger(`serveNonWebAction ${actionName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
-
-  const actionResponse = { statusCode: 401, body: { error: 'The resource requires authentication, which was not supplied with the request' } }
-  return httpStatusResponse({ actionResponse, res, logger })
 }
 
 /**
@@ -479,8 +461,7 @@ async function serveWebAction (req, res, actionConfig) {
 
   if (invoker) {
     if (!isWebAction(contextItem)) {
-      const actionResponse = { statusCode: 404, body: { error: 'The requested resource does not exist.' } }
-      return httpStatusResponse({ actionResponse, res, logger: actionLogger })
+      actionLogger.warn('serving non-web action : this call will fail if deployed.')
     }
     if (isRawWebAction(contextItem)) {
       actionLogger.warn('raw handling is not implemented yet')
@@ -532,7 +513,6 @@ function isObjectNotArray (item) {
 module.exports = {
   runDev,
   serveWebAction,
-  serveNonWebAction,
   httpStatusResponse,
   invokeAction,
   invokeSequence,
