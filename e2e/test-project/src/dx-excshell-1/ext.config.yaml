@@ -74,6 +74,14 @@ runtimeManifest:
             LOG_LEVEL: debug
           annotations:
             final: true
+        syntaxError:
+          function: actions/syntaxidermist/index.js
+          web: 'yes'
+          runtime: nodejs:18
+          inputs:
+            LOG_LEVEL: debug
+          annotations:
+            final: true
         throwsError:
           function: actions/throwsError/index.js
           web: 'yes'

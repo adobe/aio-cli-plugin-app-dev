@@ -153,6 +153,17 @@ describe('http api tests', () => {
     })
   })
 
+  test('web action with syntax error (400)', async () => {
+    const url = createApiUrl({ actionName: 'syntaxError' })
+
+    const response = await fetch(url, { agent: HTTPS_AGENT })
+    expect(response.ok).toBeFalsy()
+    expect(response.status).toEqual(400)
+    expect(await response.json()).toMatchObject({
+      error: expect.stringMatching('Error loading action function')
+    })
+  })
+
   test('web action requires adobe auth, auth is provided (200)', async () => {
     const url = createApiUrl({ actionName: 'requireAdobeAuth' })
 

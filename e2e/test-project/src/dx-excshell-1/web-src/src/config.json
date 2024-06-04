@@ -5,6 +5,7 @@
   "dx-excshell-1/addNumbers": "https://localhost:9080/api/v1/web/dx-excshell-1/addNumbers",
   "dx-excshell-1/simpleAction": "https://localhost:9080/api/v1/web/dx-excshell-1/simpleAction",
   "dx-excshell-1/noMainExport": "https://localhost:9080/api/v1/web/dx-excshell-1/noMainExport",
+  "dx-excshell-1/syntaxError": "https://localhost:9080/api/v1/web/dx-excshell-1/syntaxError",
   "dx-excshell-1/throwsError": "https://localhost:9080/api/v1/web/dx-excshell-1/throwsError",
   "dx-excshell-1/noResponseObject": "https://localhost:9080/api/v1/web/dx-excshell-1/noResponseObject",
   "dx-excshell-1/actionIsNonWeb": "https://localhost:9080/api/v1/dx-excshell-1/actionIsNonWeb",
