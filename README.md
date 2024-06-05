@@ -39,12 +39,32 @@ The openwhisk debugger had some heavy requirements, and several serious issues t
 - File Storage needs to use our cdn urls, and not AZURE_STORAGE_DOMAIN
 
 <!-- toc -->
-
+* [aio-cli-plugin-app-dev](#aio-cli-plugin-app-dev)
 <!-- tocstop -->
 
 ## Commands
 <!-- commands -->
+* [`aio-dev app dev`](#aio-dev-app-dev)
 
+## `aio-dev app dev`
+
+*Developer Preview* Run your App Builder app locally
+
+```
+USAGE
+  $ aio-dev app dev [-v] [--version] [-o] [-e <value>]
+
+FLAGS
+  -e, --extension=<value>  Run only a specific extension, this flag can only be specified once
+  -o, --open               Open the default web browser after a successful run, only valid if your app has a front-end
+  -v, --verbose            Verbose output
+  --version                Show version
+
+DESCRIPTION
+  *Developer Preview* Run your App Builder app locally
+```
+
+_See code: [src/commands/app/dev/index.js](https://github.com/adobe/aio-cli-plugin-app-dev/blob/0.2.0/src/commands/app/dev/index.js)_
 <!-- commandsstop -->
 
 ## Contributing
