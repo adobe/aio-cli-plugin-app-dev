@@ -16,7 +16,7 @@ const mockLogger = require('@adobe/aio-lib-core-logging')
 const mockLibWeb = require('@adobe/aio-lib-web')
 const mockGetPort = require('get-port')
 const {
-  runDev, serveWebAction, serveNonWebAction, httpStatusResponse, isObjectNotArray,
+  runDev, serveWebAction, serveNonWebAction, httpStatusResponse,
   invokeAction, invokeSequence, statusCodeMessage, isRawWebAction, isWebAction
 } = require('../../src/lib/run-dev')
 
@@ -153,7 +153,6 @@ test('exports', () => {
   expect(invokeSequence).toBeDefined()
   expect(isRawWebAction).toBeDefined()
   expect(isWebAction).toBeDefined()
-  expect(isObjectNotArray).toBeDefined()
   expect(statusCodeMessage).toBeDefined()
 })
 
@@ -772,7 +771,7 @@ describe('runDev', () => {
       expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
       // this next test is important: this is how VS Code debug launch configuration reads the port, from the log
       // see: https://github.com/adobe/generator-aio-app/blob/master/test/__fixtures__/add-vscode-config/launch.json
-      expect(mockLogger.info).toHaveBeenCalledWith('server running on port : ', SERVER_DEFAULT_PORT)
+      expect(mockLogger.info).toHaveBeenCalledWith(`server running on port : ${SERVER_DEFAULT_PORT}`)
     }
 
     // 1. run options *not* https
@@ -1064,23 +1063,5 @@ describe('invokeAction', () => {
     const actionRequestContext = { contextItem: action, contextItemParams: actionParams, contextItemName: actionName, packageName, actionConfig }
     const response = await invokeAction({ actionRequestContext, logger: mockLogger })
     expect(response).toMatchObject({ body: { error: expect.stringMatching('Error loading action function:') }, statusCode: 400 })
-  })
-})
-
-describe('isObjectNotArray', () => {
-  test('array should be false', () => {
-    expect(isObjectNotArray(['a', 'b', 'c'])).toBeFalsy()
-  })
-
-  test('object literal should be true', () => {
-    expect(isObjectNotArray({ some: 'object' })).toBeTruthy()
-  })
-
-  test('string should be false', () => {
-    expect(isObjectNotArray('some string')).toBeFalsy()
-  })
-
-  test('function should be false', () => {
-    expect(isObjectNotArray(() => {})).toBeFalsy()
   })
 })

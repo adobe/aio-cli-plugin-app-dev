@@ -129,10 +129,6 @@ async function runDev (runOptions, config, _inprocHookRunner) {
         port: bundlerPort,
         https: httpsSettings
       }
-      // TODO: Move this and bundleServe to aio-lib-web so we can remove the parcel dependency
-      bundleOptions.additionalReporters = [
-        { packageName: '@parcel/reporter-cli', resolveFrom: __filename }
-      ]
 
       const bundler = await bundle(entries, devConfig.web.distDev, bundleOptions, serveLogger.debug.bind(serveLogger))
       await bundler.run() // run it once
@@ -179,7 +175,7 @@ async function runDev (runOptions, config, _inprocHookRunner) {
     if (serverPort !== serverPortToUse) {
       serveLogger.info(`Could not use server port ${serverPortToUse}, using port ${serverPort} instead`)
     }
-    serveLogger.info('server running on port : ', serverPort)
+    serveLogger.info(`server running on port : ${serverPort}`)
   })
 
   let frontendUrl
@@ -387,7 +383,7 @@ async function invokeAction ({ actionRequestContext, logger }) {
       statusCode = statusCode || 200 // this is the OW default if omitted
       body = body || ''
       const isError = statusCode >= 400
-      const isObject = isObjectNotArray(response)
+      const isObject = typeof response === 'object' && !Array.isArray(response)
 
       return {
         ...(isObject && !isError ? response : {}), // pass all the other properties as well if an object, and not an error
@@ -529,16 +525,6 @@ function createActionParametersFromRequest ({ req, actionInputs = {} }) {
   }
 }
 
-/**
- * Returns true if the item is an object (but not an Array)
- *
- * @param {*} item the item to test
- * @returns {boolean} true if the item is an object (but not an Array)
- */
-function isObjectNotArray (item) {
-  return typeof item === 'object' && !Array.isArray(item)
-}
-
 module.exports = {
   runDev,
   serveWebAction,
@@ -549,6 +535,5 @@ module.exports = {
   statusCodeMessage,
   isRawWebAction,
   isWebAction,
-  createActionParametersFromRequest,
-  isObjectNotArray
+  createActionParametersFromRequest
 }
