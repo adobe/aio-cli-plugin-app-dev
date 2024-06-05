@@ -129,10 +129,6 @@ async function runDev (runOptions, config, _inprocHookRunner) {
         port: bundlerPort,
         https: httpsSettings
       }
-      // TODO: Move this and bundleServe to aio-lib-web so we can remove the parcel dependency
-      bundleOptions.additionalReporters = [
-        { packageName: '@parcel/reporter-cli', resolveFrom: __filename }
-      ]
 
       const bundler = await bundle(entries, devConfig.web.distDev, bundleOptions, serveLogger.debug.bind(serveLogger))
       await bundler.run() // run it once
@@ -179,7 +175,7 @@ async function runDev (runOptions, config, _inprocHookRunner) {
     if (serverPort !== serverPortToUse) {
       serveLogger.info(`Could not use server port ${serverPortToUse}, using port ${serverPort} instead`)
     }
-    serveLogger.info('server running on port : ', serverPort)
+    serveLogger.info(`server running on port : ${serverPort}`)
   })
 
   let frontendUrl

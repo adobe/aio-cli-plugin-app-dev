@@ -771,7 +771,7 @@ describe('runDev', () => {
       expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
       // this next test is important: this is how VS Code debug launch configuration reads the port, from the log
       // see: https://github.com/adobe/generator-aio-app/blob/master/test/__fixtures__/add-vscode-config/launch.json
-      expect(mockLogger.info).toHaveBeenCalledWith('server running on port : ', SERVER_DEFAULT_PORT)
+      expect(mockLogger.info).toHaveBeenCalledWith(`server running on port : ${SERVER_DEFAULT_PORT}`)
     }
 
     // 1. run options *not* https
