@@ -16,9 +16,11 @@ const mockLogger = require('@adobe/aio-lib-core-logging')
 const mockLibWeb = require('@adobe/aio-lib-web')
 const mockGetPort = require('get-port')
 const {
-  runDev, serveWebAction, serveNonWebAction, httpStatusResponse,
-  invokeAction, invokeSequence, statusCodeMessage, isRawWebAction, isWebAction
+  createActionParametersFromRequest, runDev, serveWebAction, serveNonWebAction, httpStatusResponse,
+  invokeAction, invokeSequence, interpolate, statusCodeMessage, isRawWebAction, isWebAction
 } = require('../../src/lib/run-dev')
+
+/* eslint no-template-curly-in-string: 0 */
 
 jest.useFakeTimers()
 
@@ -144,6 +146,23 @@ beforeEach(() => {
   mockExpress.mockReset()
 })
 
+describe('test interpolate', () => {
+  test('interpolate', async () => {
+    expect(interpolate('bare braces {} hello ${name}', { name: 'world' }))
+      .toMatch('bare braces {} hello world')
+    expect(interpolate('literal value with double quotes hello "{name}"', { name: 'world' }))
+      .toMatch('literal value with double quotes hello "{name}"')
+    expect(interpolate('literal value with single quotes hello \'{name}\'', { name: 'world' }))
+      .toMatch('literal value with single quotes hello \'{name}\'')
+    expect(interpolate('dollar-braces hello ${name}', { name: 'world' }))
+      .toMatch('dollar-braces hello world')
+    expect(interpolate('dollar-key hello $name', { name: 'world' }))
+      .toMatch('dollar-key hello world')
+    expect(interpolate('multi-key hello ${name}, {name}, and $name', { name: 'world' }))
+      .toMatch('multi-key hello world, world, and world')
+  })
+})
+
 test('exports', () => {
   expect(runDev).toBeDefined()
   expect(serveWebAction).toBeDefined()
@@ -154,6 +173,48 @@ test('exports', () => {
   expect(isRawWebAction).toBeDefined()
   expect(isWebAction).toBeDefined()
   expect(statusCodeMessage).toBeDefined()
+})
+
+describe('createActionParametersFromRequest', () => {
+  test('interpolate', async () => {
+    process.env.mustache = 'world'
+    const req = createReq({ url: 'foo/bar', body: { name: 'world' }, headers: ['content-type'] })
+    const packageName = 'foo'
+    const action = {
+      function: fixturePath('actions/successReturnAction.js'),
+      inputs: {
+        dollarMustache: 'value is ${mustache}',
+        justDollar: 'value is $mustache',
+        mustache: 'value is {mustache}',
+        literal: 'value is literally "${mustache}" and "{mustache}"',
+        doesNotExist: 'value is ${doesNotExist}'
+      }
+    }
+    const actionName = 'a'
+    const actionConfig = {
+      [packageName]: {
+        actions: {
+          [actionName]: action
+        }
+      }
+    }
+    const actionRequestContext = { action, actionConfig, packageName, actionName }
+
+    const actionParams = await createActionParametersFromRequest({
+      req,
+      actionRequestContext,
+      actionInputs: action.inputs,
+      logger: mockLogger
+    })
+    expect(actionParams).toMatchObject({
+      dollarMustache: 'value is world',
+      justDollar: 'value is world',
+      mustache: 'value is world',
+      literal: 'value is literally "${mustache}" and "{mustache}"',
+      doesNotExist: 'value is ${doesNotExist}'
+    })
+    delete process.env.mustache
+  })
 })
 
 describe('isWebAction', () => {

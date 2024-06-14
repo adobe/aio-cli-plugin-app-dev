@@ -313,7 +313,6 @@ async function invokeSequence ({ actionRequestContext, logger }) {
  */
 async function invokeAction ({ actionRequestContext, logger }) {
   const { contextItem: action, contextItemName: actionName, contextItemParams: params } = actionRequestContext
-
   // check if action is protected
   if (action?.annotations?.['require-adobe-auth']) {
     // http header keys are case-insensitive
@@ -503,6 +502,29 @@ async function serveWebAction (req, res, actionConfig) {
 }
 
 /**
+ * Interpolates variables in a string with values from a props object.
+ *
+ * @param {string} valueString the string to interpolate
+ * @param {object} props the object containing the variable values
+ * @returns {string} the interpolated string
+ * This function now uses the regular expression
+ * /\$\{(\w+)\}|\$(\w+)|\{(\w+)\}/g
+ * which matches either
+ * ${VAR_NAME}, $VAR_NAME, or {VAR_NAME}.
+ * The | character in the regular expression denotes "or", so it matches either
+ * pattern. The replace function then uses the matched variable name to look up
+ * the corresponding value in the provided props object. If the variable is not
+ * defined in the props object, it replaces it with an empty string.
+ */
+function interpolate (valueString, props) {
+  // replace ${}, $, and {} with values from props, but not if they are enclosed in quotes
+  // if key is not found on props, the value is returned as is (no replacement)
+  const retStr = valueString.replace(/(?<!['"`])\$\{(\w+)\}(?!['"`])|(?<!['"`])\$(\w+)(?!['"`])|(?<!['"`])\{(\w+)\}(?!['"`])/g,
+    (_, varName1, varName2, varName3) => props[varName1 || varName2 || varName3] || _)
+  return retStr
+}
+
+/**
  * Create action parameters.
  *
  * @param {object} param the parameters
@@ -511,6 +533,11 @@ async function serveWebAction (req, res, actionConfig) {
  * @returns {object} the action parameters
  */
 function createActionParametersFromRequest ({ req, actionInputs = {} }) {
+  // note we clone action so if env vars change between runs it is reflected - jm
+  const action = { inputs: {} }
+  Object.entries(actionInputs).forEach(([key, value]) => {
+    action.inputs[key] = interpolate(value, process.env)
+  })
   return {
     __ow_body: req.body,
     __ow_headers: {
@@ -520,13 +547,14 @@ function createActionParametersFromRequest ({ req, actionInputs = {} }) {
     __ow_query: req.query,
     __ow_method: req.method.toLowerCase(),
     ...req.query,
-    ...actionInputs,
+    ...action.inputs,
     ...(req.is('application/json') ? req.body : {})
   }
 }
 
 module.exports = {
   runDev,
+  interpolate,
   serveWebAction,
   serveNonWebAction,
   httpStatusResponse,
