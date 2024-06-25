@@ -20,7 +20,7 @@ This uses the approach of a simulator, rather than an emulator.
 
 ## `aio-dev app dev`
 
-*Developer Preview* Run your App Builder app locally
+Run your App Builder app locally
 
 ```
 USAGE
@@ -33,7 +33,7 @@ FLAGS
   --version                Show version
 
 DESCRIPTION
-  *Developer Preview* Run your App Builder app locally
+  Run your App Builder app locally
 ```
 
 _See code: [src/commands/app/dev/index.js](https://github.com/adobe/aio-cli-plugin-app-dev/blob/0.2.0/src/commands/app/dev/index.js)_
