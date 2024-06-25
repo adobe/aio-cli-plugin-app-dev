@@ -246,7 +246,7 @@ class Dev extends BaseCommand {
     const server = https.createServer({ key: privateKey, cert: publicCert }, (_, res) => {
       certAccepted = true
       res.writeHead(200)
-      res.end('Congrats, you have accepted the certificate and can now use it for development on this machine.\n' +
+      res.end('Great, you have accepted the certificate and can now use it for development on this machine.\n' +
       'You can close this window.')
     })
 
@@ -255,6 +255,7 @@ class Dev extends BaseCommand {
     server.listen(actualPort)
     this.log('A self signed development certificate has been generated, you will need to accept it in your browser in order to use it.')
     open(`https://localhost:${actualPort}`)
+
     ux.action.start('Waiting for the certificate to be accepted.')
 
     // eslint-disable-next-line no-unmodified-loop-condition
@@ -274,7 +275,7 @@ class Dev extends BaseCommand {
   }
 }
 
-Dev.description = '*Developer Preview* Run your App Builder app locally'
+Dev.description = 'Run your App Builder app locally'
 
 Dev.args = {}
 
