@@ -16,15 +16,15 @@ This uses the approach of a simulator, rather than an emulator.
 
 ## Commands
 <!-- commands -->
-* [`aio-dev app dev`](#aio-dev-app-dev)
+* [`aio app dev`](#aio-app-dev)
 
-## `aio-dev app dev`
+## `aio app dev`
 
 Run your App Builder app locally
 
 ```
 USAGE
-  $ aio-dev app dev [-v] [--version] [-o] [-e <value>]
+  $ aio app dev [-v] [--version] [-o] [-e <value>]
 
 FLAGS
   -e, --extension=<value>  Run only a specific extension, this flag can only be specified once
