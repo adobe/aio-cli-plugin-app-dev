@@ -62,7 +62,7 @@
   "license": "Apache-2.0",
   "oclif": {
     "commands": "./src/commands",
-    "bin": "aio-dev",
+    "bin": "aio",
     "topicSeparator": " ",
     "repositoryPrefix": "<%- repo %>/blob/<%- version %>/<%- commandPath %>"
   },
