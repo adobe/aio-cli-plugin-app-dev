@@ -160,6 +160,7 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   }
 
   const app = express()
+  app.use(express.urlencoded())
   app.use(express.json())
   if (hasFrontend) {
     app.use(connectLiveReload())
@@ -538,8 +539,8 @@ function createActionParametersFromRequest ({ req, actionInputs = {} }) {
   Object.entries(actionInputs).forEach(([key, value]) => {
     action.inputs[key] = interpolate(value, process.env)
   })
-  return {
-    __ow_body: req.body,
+
+  const params = {
     __ow_headers: {
       ...req.headers,
       'x-forwarded-for': '127.0.0.1'
@@ -547,9 +548,14 @@ function createActionParametersFromRequest ({ req, actionInputs = {} }) {
     __ow_query: req.query,
     __ow_method: req.method.toLowerCase(),
     ...req.query,
-    ...action.inputs,
-    ...(req.is('application/json') ? req.body : {})
+    ...action.inputs
   }
+  if (req.is('application/*')) {
+    Object.assign(params, req.body)
+  } else {
+    params.__ow_body = req.body
+  }
+  return params
 }
 
 module.exports = {
