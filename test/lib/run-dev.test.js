@@ -487,7 +487,7 @@ describe('serveWebAction', () => {
   test('action not found, is sequence', async () => {
     const mockStatus = jest.fn()
     const mockSend = jest.fn()
-    const is = jest.fn((mimeType) => mimeType === 'application/json')
+    const is = jest.fn((mimeType) => mimeType === 'application/*')
 
     const res = createRes({ mockStatus, mockSend })
     const req = createReq({ url: 'foo/mysequence', is })

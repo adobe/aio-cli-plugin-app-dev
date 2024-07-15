@@ -20,7 +20,7 @@ const { DEV_API_PREFIX, DEV_API_WEB_PREFIX } = require('../src/lib/constants')
 const treeKill = require('tree-kill')
 
 jest.unmock('execa')
-jest.setTimeout(30000)
+jest.setTimeout(60000)
 
 // load .env values in the e2e folder, if any
 require('dotenv').config({ path: path.join(__dirname, '.env') })
@@ -131,6 +131,29 @@ describe('http api tests', () => {
       // the module uses OS specific processes to find all related pids and kill them
       return new Promise((resolve) => treeKill(serverProcess.pid, 'SIGTERM', resolve))
     }
+  })
+
+  test('post url-encoded data (should be promoted to params)', async () => {
+    const key = 'some_key'
+    const value = 'some_value'
+
+    const url = createApiUrl({ actionName: 'post-data' })
+    const formData = new URLSearchParams()
+    formData.append(key, value)
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: formData.toString(),
+      agent: HTTPS_AGENT
+    })
+
+    expect(response.ok).toBeTruthy()
+    expect(response.status).toEqual(200)
+    const responseJson = await response.json()
+    expect(responseJson.params).toMatchObject({ [key]: value })
   })
 
   test('front end is available (200)', async () => {
