@@ -34,6 +34,14 @@ runtimeManifest:
           annotations:
             require-adobe-auth: true
             final: true
+        post-data:
+          function: actions/post-data/index.js
+          web: 'yes'
+          runtime: nodejs:18
+          inputs:
+            LOG_LEVEL: debug
+          annotations:
+            final: true
         noAdobeAuth:
           function: actions/simple/index.js
           web: 'yes'
