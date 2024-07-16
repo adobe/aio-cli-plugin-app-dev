@@ -11,6 +11,6 @@ governing permissions and limitations under the License.
 */
 
 exports.main = function () {
-  // this error is expected, its what we are testing
+  // @ts-expect-error this error is expected, its what we are testing
   const colon = :
 }
