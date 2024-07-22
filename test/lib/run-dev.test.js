@@ -1123,6 +1123,6 @@ describe('invokeAction', () => {
 
     const actionRequestContext = { contextItem: action, contextItemParams: actionParams, contextItemName: actionName, packageName, actionConfig }
     const response = await invokeAction({ actionRequestContext, logger: mockLogger })
-    expect(response).toMatchObject({ body: { error: expect.stringMatching('Error loading action function:') }, statusCode: 400 })
+    expect(response).toMatchObject({ body: { error: expect.stringMatching('Response is not valid \'message/http\'.') }, statusCode: 400 })
   })
 })
