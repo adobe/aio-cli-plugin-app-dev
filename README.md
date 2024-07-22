@@ -36,7 +36,7 @@ DESCRIPTION
   Run your App Builder app locally
 ```
 
-_See code: [src/commands/app/dev/index.js](https://github.com/adobe/aio-cli-plugin-app-dev/blob/1.0.0/src/commands/app/dev/index.js)_
+_See code: [src/commands/app/dev/index.js](https://github.com/adobe/aio-cli-plugin-app-dev/blob/1.0.1/src/commands/app/dev/index.js)_
 <!-- commandsstop -->
 
 ## Contributing
