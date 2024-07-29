@@ -341,10 +341,11 @@ async function invokeAction ({ actionRequestContext, logger }) {
   try {
     actionFunction = require(action.function)?.main
   } catch (e) {
-    logger.error(`${actionName} action not found, or does not export main`)
+    const message = `${actionName} action not found, or does not export main`
+    logger.error(message)
     return {
       statusCode: 400,
-      body: { error: 'Response is not valid \'message/http\'.' }
+      body: { error: `Response is not valid 'message/http'. ${message}` }
     }
   }
 
