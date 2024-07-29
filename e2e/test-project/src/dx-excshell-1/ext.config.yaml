@@ -42,6 +42,14 @@ runtimeManifest:
             LOG_LEVEL: debug
           annotations:
             final: true
+        post-raw-data:
+          function: actions/post-raw-data/index.js
+          web: 'raw'
+          runtime: nodejs:18
+          inputs:
+            LOG_LEVEL: debug
+          annotations:
+            final: true
         noAdobeAuth:
           function: actions/simple/index.js
           web: 'yes'

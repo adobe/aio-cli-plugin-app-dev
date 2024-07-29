@@ -156,6 +156,113 @@ describe('http api tests', () => {
     expect(responseJson.params).toMatchObject({ [key]: value })
   })
 
+  test('post json data (should be promoted to params)', async () => {
+    const key = 'some_key'
+    const value = 'some_value'
+
+    const url = createApiUrl({ actionName: 'post-data' })
+    const body = JSON.stringify({
+      [key]: value
+    })
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body,
+      agent: HTTPS_AGENT
+    })
+
+    expect(response.ok).toBeTruthy()
+    expect(response.status).toEqual(200)
+    const responseJson = await response.json()
+    expect(responseJson.params).toMatchObject({ [key]: value })
+  })
+
+  test('post raw data (should be base64-encoded params.__ow_body)', async () => {
+    const url = createApiUrl({ actionName: 'post-raw-data' })
+    const body = 'hey jude don\'t carry the world upon your shoulders'
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      },
+      body,
+      agent: HTTPS_AGENT
+    })
+
+    expect(response.ok).toBeTruthy()
+    expect(response.status).toEqual(200)
+    const responseJson = await response.json()
+    expect(responseJson.params).toMatchObject({ __ow_body: Buffer.from(body).toString('base64') })
+  })
+
+  test('post raw data (unknown content-type)', async () => {
+    const url = createApiUrl({ actionName: 'post-raw-data' })
+    const body = '99 luftballons'
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-foo-bar'
+      },
+      body,
+      agent: HTTPS_AGENT
+    })
+
+    expect(response.ok).toBeFalsy()
+    expect(response.status).toEqual(400)
+    const responseJson = await response.json()
+    // TODO: this will not yet match the Production server
+    expect(responseJson).toMatchObject({ error: 'request body Content-Type must be either: application/octet-stream,multipart/form-data' })
+  })
+
+  test('post raw data (application/json override)', async () => {
+    const url = createApiUrl({ actionName: 'post-raw-data' })
+    const body = JSON.stringify({ hello: 'world' })
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body,
+      agent: HTTPS_AGENT
+    })
+
+    expect(response.ok).toBeTruthy()
+    expect(response.status).toEqual(200)
+    const responseJson = await response.json()
+    expect(responseJson.params.__ow_body).not.toBeDefined()
+    expect(responseJson.params.hello).toEqual('world')
+  })
+
+  test('post raw data (application/x-www-form-urlencoded override)', async () => {
+    const key = 'some_key'
+    const value = 'some_value'
+
+    const url = createApiUrl({ actionName: 'post-raw-data' })
+    const formData = new URLSearchParams()
+    formData.append(key, value)
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: formData.toString(),
+      agent: HTTPS_AGENT
+    })
+
+    expect(response.ok).toBeTruthy()
+    expect(response.status).toEqual(200)
+    const responseJson = await response.json()
+    expect(responseJson.params.__ow_body).not.toBeDefined()
+    expect(responseJson.params[key]).toEqual(value)
+  })
+
   test('front end is available (200)', async () => {
     const url = `https://${E2E_CDN_HOST}:${E2E_PORT}/index.html`
 

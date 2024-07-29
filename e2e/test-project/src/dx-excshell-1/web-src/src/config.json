@@ -1,6 +1,7 @@
 {
   "dx-excshell-1/requireAdobeAuth": "https://localhost:9080/api/v1/web/dx-excshell-1/requireAdobeAuth",
   "dx-excshell-1/post-data": "https://localhost:9080/api/v1/web/dx-excshell-1/post-data",
+  "dx-excshell-1/post-raw-data": "https://localhost:9080/api/v1/web/dx-excshell-1/post-raw-data",
   "dx-excshell-1/noAdobeAuth": "https://localhost:9080/api/v1/web/dx-excshell-1/noAdobeAuth",
   "dx-excshell-1/squareNumber": "https://localhost:9080/api/v1/web/dx-excshell-1/squareNumber",
   "dx-excshell-1/addNumbers": "https://localhost:9080/api/v1/web/dx-excshell-1/addNumbers",

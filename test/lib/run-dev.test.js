@@ -605,6 +605,39 @@ describe('serveWebAction', () => {
     expect(mockStatus).toHaveBeenCalledWith(200)
   })
 
+  test('action found, is raw web action (unsupported content-type)', async () => {
+    const mimeType = 'application/x-foo-bar'
+    const mockStatus = jest.fn()
+    const mockSend = jest.fn()
+    const is = (_type) => _type === mimeType
+
+    const res = createRes({ mockStatus, mockSend })
+    const req = createReq({
+      is,
+      body: 'some body',
+      url: 'foo/bar',
+      headers: {
+        'content-type': mimeType
+      }
+    })
+    const packageName = 'foo'
+
+    const actionConfig = {
+      [packageName]: {
+        actions: {
+          bar: {
+            function: fixturePath('actions/successReturnAction.js'),
+            web: 'raw'
+          }
+        }
+      }
+    }
+
+    await serveWebAction(req, res, actionConfig)
+    expect(mockSend).toHaveBeenCalledTimes(1)
+    expect(mockStatus).toHaveBeenCalledWith(400)
+  })
+
   test('action not found, is sequence', async () => {
     const mockStatus = jest.fn()
     const mockSend = jest.fn()

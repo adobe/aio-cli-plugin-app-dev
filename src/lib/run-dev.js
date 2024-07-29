@@ -473,11 +473,16 @@ async function serveWebAction (req, res, actionConfig) {
   }
 
   const actionLogger = coreLogger(`serveWebAction ${contextItemName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
+  let contextItemParams
 
-  const contextItemParams = createActionParametersFromRequest({ req, contextItem, actionInputs: action?.inputs })
-  contextItemParams.__ow_path = owPath
-
-  actionLogger.debug('contextItemParams =', contextItemParams)
+  try {
+    contextItemParams = createActionParametersFromRequest({ req, contextItem, actionInputs: action?.inputs })
+    contextItemParams.__ow_path = owPath
+    actionLogger.debug('contextItemParams =', contextItemParams)
+  } catch (e) {
+    const actionResponse = { statusCode: 400, body: { error: e.message } }
+    return httpStatusResponse({ actionResponse, res, logger: actionLogger })
+  }
 
   const actionRequestContext = {
     packageName,
