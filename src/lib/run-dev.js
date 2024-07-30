@@ -22,6 +22,7 @@ const getPort = require('get-port')
 const rtLib = require('@adobe/aio-lib-runtime')
 const coreLogger = require('@adobe/aio-lib-core-logging')
 const { getReasonPhrase } = require('http-status-codes')
+const { Buffer } = require('node:buffer')
 
 const utils = require('./app-helper')
 const { SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX, BUNDLE_OPTIONS, CHANGED_ASSETS_PRINT_LIMIT } = require('./constants')
@@ -559,19 +560,27 @@ function createActionParametersFromRequest ({ req, contextItem, actionInputs = {
 
   const isJson = req.is('application/json')
   const isFormData = req.is('application/x-www-form-urlencoded')
-  const isRawContentTypes = RAW_CONTENT_TYPES.some((contentType) => req.is(contentType))
   const isRaw = isRawWebAction(contextItem)
 
-  if (isJson || isFormData) { // parsed by express middleware
-    Object.assign(params, req.body)
-  } else if (isRaw) {
-    if (isRawContentTypes) {
-      params.__ow_body = req.body.toString('base64') // body is a Buffer, base64 encode it
-    } else {
-      throw new Error(`request body Content-Type must be either: ${RAW_CONTENT_TYPES.join(',')}`)
+  try {
+    if (params.__ow_method === 'post' && req.body) {
+      if (isRaw) {
+        if (isFormData) {
+          params.__ow_body = new URLSearchParams(req.body).toString() // convert json back to query string
+        } else if (isJson) {
+          params.__ow_body = Buffer.from(JSON.stringify(req.body)).toString('base64')
+        } else {
+          params.__ow_body = utils.bodyTransformToRaw(req.body)
+        }
+      } else if (isJson || isFormData) { // body is parsed by express middleware into json
+        Object.assign(params, req.body)
+      } else {
+        params.__ow_body = utils.bodyTransformToRaw(req.body)
+      }
     }
-  } else {
-    params.__ow_body = req.body
+  } catch (e) {
+    console.error('!!!!!!!!!!!!!!!!!!!!!!!')
+    console.error(e)
   }
 
   return params

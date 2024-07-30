@@ -106,7 +106,50 @@ function writeConfig (file, config) {
   fs.writeJSONSync(file, config, { spaces: 2 })
 }
 
+/**
+ * The fastest way to determine an empty object, since it short-circuits.
+ * (JSON.stringify is ten to 100 times slower objectively, and wasteful)
+ * https://stackoverflow.com/a/59787784
+ *
+ * @param {object} obj the object to test
+ * @returns {boolean} true if it's empty
+ */
+function isEmptyObject (obj) {
+  let name
+  for (name in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, name)) {
+      return false
+    }
+  }
+  return true
+}
+
+/**
+ * Transforms the request body to the expected raw format.
+ *
+ * @param {string | object} body the request body
+ * @returns {string} expected raw format (base64 or empty string)
+ */
+function bodyTransformToRaw (body) {
+  if (typeof body === 'string') {
+    return Buffer.from(body).toString('base64')
+  } else if (typeof body === 'object') {
+    // body can be the empty object
+    if (!isEmptyObject(body)) {
+      if (Buffer.isBuffer(body)) {
+        return body.toString('base64')
+      } else {
+        return Buffer.from(JSON.stringify(body)).toString('base64')
+      }
+    }
+  }
+
+  return ''
+}
+
 module.exports = {
+  bodyTransformToRaw,
+  isEmptyObject,
   runInProcess,
   runScript,
   writeConfig
