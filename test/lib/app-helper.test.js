@@ -10,7 +10,7 @@ OF ANY KIND, either express or implied. See the License for the specific languag
 governing permissions and limitations under the License.
 */
 
-const { runInProcess, runScript, writeConfig } = require('../../src/lib/app-helper')
+const { runInProcess, runScript, writeConfig, isEmptyObject, bodyTransformToRaw } = require('../../src/lib/app-helper')
 const mockLogger = require('@adobe/aio-lib-core-logging')
 const path = require('node:path')
 const fs = require('fs-extra')
@@ -212,5 +212,56 @@ describe('writeConfig', () => {
     writeConfig('the/dir/some.file', json)
     expect(fs.ensureDirSync).toHaveBeenCalledWith('the/dir')
     expect(fs.writeJSONSync).toHaveBeenCalledWith('the/dir/some.file', json, { spaces: 2 })
+  })
+})
+
+describe('isEmptyObject', () => {
+  test('not empty', () => {
+    expect(isEmptyObject({ foo: 'bar' })).toBeFalsy()
+  })
+
+  test('empty', () => {
+    expect(isEmptyObject({})).toBeTruthy()
+  })
+
+  test('non-object', () => {
+    expect(isEmptyObject()).toBeFalsy()
+  })
+
+  test('empty (branch coverage)', () => {
+    /** @private */
+    function Item () {}
+    // isn't javascript lovely
+    Item.prototype.foo = 'bar'
+
+    expect(isEmptyObject(new Item())).toBeTruthy()
+  })
+})
+
+describe('bodyTransformToRaw', () => {
+  test('string', () => {
+    const body = 'hello world'
+    expect(bodyTransformToRaw(body)).toEqual(body)
+  })
+
+  test('empty object', () => {
+    const body = {}
+    expect(bodyTransformToRaw(body)).toEqual('')
+  })
+
+  test('buffer', () => {
+    const str = 'hello world'
+    const body = Buffer.from(str)
+    expect(bodyTransformToRaw(body)).toEqual(body.toString('base64'))
+  })
+
+  test('json', () => {
+    const body = { hello: 'world' }
+    expect(bodyTransformToRaw(body)).toEqual(Buffer.from(JSON.stringify(body)).toString('base64'))
+  })
+
+  test('not string or object', () => {
+    const body = 99
+    expect(bodyTransformToRaw(body)).toEqual('')
   })
 })

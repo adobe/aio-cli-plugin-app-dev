@@ -11,6 +11,7 @@ governing permissions and limitations under the License.
 */
 
 const staticMocks = {
+  text: jest.fn(),
   raw: jest.fn(),
   json: jest.fn(),
   urlencoded: jest.fn(),

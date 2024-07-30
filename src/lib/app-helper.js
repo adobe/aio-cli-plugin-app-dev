@@ -115,6 +115,10 @@ function writeConfig (file, config) {
  * @returns {boolean} true if it's empty
  */
 function isEmptyObject (obj) {
+  if (typeof obj !== 'object') {
+    return false
+  }
+
   let name
   for (name in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, name)) {
@@ -132,7 +136,7 @@ function isEmptyObject (obj) {
  */
 function bodyTransformToRaw (body) {
   if (typeof body === 'string') {
-    return Buffer.from(body).toString('base64')
+    return body
   } else if (typeof body === 'object') {
     // body can be the empty object
     if (!isEmptyObject(body)) {

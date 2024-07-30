@@ -180,7 +180,7 @@ describe('http api tests', () => {
     expect(responseJson.params).toMatchObject({ [key]: value })
   })
 
-  test('non-raw: post unknown content-type', async () => {
+  test('non-raw: post text/plain content-type, with body', async () => {
     // any other content-type, the body will be base64 encoded into __ow_body
     const key = 'some_key'
     const value = 'some_value'
@@ -193,7 +193,7 @@ describe('http api tests', () => {
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-some-thing'
+        'Content-Type': 'text/plain'
       },
       body,
       agent: HTTPS_AGENT
@@ -202,16 +202,16 @@ describe('http api tests', () => {
     expect(response.ok).toBeTruthy()
     expect(response.status).toEqual(200)
     const responseJson = await response.json()
-    expect(responseJson.params).toMatchObject({ __ow_body: Buffer.from(body).toString('base64') })
+    expect(responseJson.params).toMatchObject({ __ow_body: body })
   })
 
-  test('non-raw: post unknown content-type, no body', async () => {
+  test('non-raw: post text/plain content-type, no body', async () => {
     const url = createApiUrl({ actionName: 'post-data' })
 
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-some-thing'
+        'Content-Type': 'text/plain'
       },
       agent: HTTPS_AGENT
     })
@@ -287,7 +287,7 @@ describe('http api tests', () => {
     expect(responseJson.params).toMatchObject({ __ow_body: body })
   })
 
-  test('raw: post unknown content-type', async () => {
+  test('raw: post text/plain content-type', async () => {
     // NOTE: for any other content-type, raw will always set __ow_body (base64 encoded)
     const url = createApiUrl({ actionName: 'post-raw-data' })
     const body = '99 luftballons'
@@ -295,7 +295,7 @@ describe('http api tests', () => {
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-foo-bar'
+        'Content-Type': 'text/plain'
       },
       body,
       agent: HTTPS_AGENT
@@ -304,7 +304,7 @@ describe('http api tests', () => {
     expect(response.ok).toBeTruthy()
     expect(response.status).toEqual(200)
     const responseJson = await response.json()
-    expect(responseJson.params).toMatchObject({ __ow_body: Buffer.from(body).toString('base64') })
+    expect(responseJson.params).toMatchObject({ __ow_body: body })
   })
 
   test('front end is available (200)', async () => {

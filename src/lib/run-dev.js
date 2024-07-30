@@ -162,8 +162,9 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   }
 
   const app = express()
+  app.use(express.text({ type: 'text/plain' }))
+  app.use(express.json({ strict: false }))
   app.use(express.urlencoded())
-  app.use(express.json())
   app.use(express.raw({ type: RAW_CONTENT_TYPES }))
 
   if (hasFrontend) {
@@ -476,16 +477,9 @@ async function serveWebAction (req, res, actionConfig) {
   }
 
   const actionLogger = coreLogger(`serveWebAction ${contextItemName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
-  let contextItemParams
-
-  try {
-    contextItemParams = createActionParametersFromRequest({ req, contextItem, actionInputs: action?.inputs })
-    contextItemParams.__ow_path = owPath
-    actionLogger.debug('contextItemParams =', contextItemParams)
-  } catch (e) {
-    const actionResponse = { statusCode: 400, body: { error: e.message } }
-    return httpStatusResponse({ actionResponse, res, logger: actionLogger })
-  }
+  const contextItemParams = createActionParametersFromRequest({ req, contextItem, actionInputs: action?.inputs })
+  contextItemParams.__ow_path = owPath
+  actionLogger.debug('contextItemParams =', contextItemParams)
 
   const actionRequestContext = {
     packageName,
@@ -564,25 +558,20 @@ function createActionParametersFromRequest ({ req, contextItem, actionInputs = {
   const isFormData = req.is('application/x-www-form-urlencoded')
   const isRaw = isRawWebAction(contextItem)
 
-  try {
-    if (params.__ow_method === 'post' && req.body) {
-      if (isRaw) {
-        if (isFormData) {
-          params.__ow_body = new URLSearchParams(req.body).toString() // convert json back to query string
-        } else if (isJson) {
-          params.__ow_body = Buffer.from(JSON.stringify(req.body)).toString('base64')
-        } else {
-          params.__ow_body = utils.bodyTransformToRaw(req.body)
-        }
-      } else if (isJson || isFormData) { // body is parsed by express middleware into json
-        Object.assign(params, req.body)
+  if (params.__ow_method === 'post' && req.body !== null) {
+    if (isRaw) {
+      if (isFormData) {
+        params.__ow_body = new URLSearchParams(req.body).toString() // convert json back to query string
+      } else if (isJson) {
+        params.__ow_body = Buffer.from(JSON.stringify(req.body)).toString('base64')
       } else {
         params.__ow_body = utils.bodyTransformToRaw(req.body)
       }
+    } else if (isJson || isFormData) { // body is parsed by express middleware into json
+      Object.assign(params, req.body)
+    } else {
+      params.__ow_body = utils.bodyTransformToRaw(req.body)
     }
-  } catch (e) {
-    console.error('!!!!!!!!!!!!!!!!!!!!!!!')
-    console.error(e)
   }
 
   return params
