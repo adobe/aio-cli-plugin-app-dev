@@ -334,7 +334,7 @@ describe('http api tests', () => {
     expect(response.ok).toBeFalsy()
     expect(response.status).toEqual(400)
     expect(await response.json()).toMatchObject({
-      error: expect.stringMatching('Response is not valid \'message/http\'')
+      error: expect.stringMatching('Response is not valid \'message/http\'.')
     })
   })
 
