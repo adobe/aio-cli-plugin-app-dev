@@ -1,3 +1,5 @@
+hooks:
+  post-app-deploy: node src/dx-excshell-1/hooks/post-app-deploy.js
 operations:
   view:
     - type: web
@@ -82,7 +84,7 @@ runtimeManifest:
             LOG_LEVEL: debug
           annotations:
             final: true
-        syntaxError:
+        syntaxError: # for deploying to actual Runtime, modify hooks/post-app-deploy.js. Since webpack won't build a module with a syntax error
           function: actions/syntaxidermist/index.js
           web: 'yes'
           runtime: nodejs:18
