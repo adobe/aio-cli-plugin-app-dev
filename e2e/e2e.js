@@ -133,6 +133,26 @@ describe('http api tests', () => {
     }
   })
 
+  test('non-raw: post multipart/form-data content-type', async () => {
+    // NOTE: for this content-type, it will always set __ow_body (base64 encoded)
+    const url = createApiUrl({ actionName: 'post-data' })
+    const body = 'hey jude don\'t carry the world upon your shoulders'
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      },
+      body,
+      agent: HTTPS_AGENT
+    })
+
+    expect(response.ok).toBeTruthy()
+    expect(response.status).toEqual(200)
+    const responseJson = await response.json()
+    expect(responseJson.params).toMatchObject({ __ow_body: Buffer.from(body).toString('base64') })
+  })
+
   test('non-raw: post application/x-www-form-urlencoded (should be promoted to params)', async () => {
     const key = 'some_key'
     const value = 'some_value'
@@ -288,7 +308,6 @@ describe('http api tests', () => {
   })
 
   test('raw: post text/plain content-type', async () => {
-    // NOTE: for any other content-type, raw will always set __ow_body (base64 encoded)
     const url = createApiUrl({ actionName: 'post-raw-data' })
     const body = '99 luftballons'
 
