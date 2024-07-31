@@ -161,10 +161,15 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   }
 
   const app = express()
-  app.use(express.text({ type: 'text/plain' }))
-  app.use(express.json({ strict: false }))
-  app.use(express.urlencoded())
-  app.use(express.raw({ type: RAW_CONTENT_TYPES }))
+
+  const middlewareOptions = {
+    inflate: false, // the same behavior in the cloud
+    limit: '1MB' // the same limits in the cloud
+  }
+  app.use(express.text({ ...middlewareOptions, type: 'text/plain' }))
+  app.use(express.json({ ...middlewareOptions, strict: false }))
+  app.use(express.urlencoded(middlewareOptions))
+  app.use(express.raw({ ...middlewareOptions, type: RAW_CONTENT_TYPES }))
 
   if (hasFrontend) {
     app.use(connectLiveReload())
