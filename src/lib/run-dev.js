@@ -22,7 +22,6 @@ const getPort = require('get-port')
 const rtLib = require('@adobe/aio-lib-runtime')
 const coreLogger = require('@adobe/aio-lib-core-logging')
 const { getReasonPhrase } = require('http-status-codes')
-const { Buffer } = require('node:buffer')
 
 const utils = require('./app-helper')
 const { SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX, BUNDLE_OPTIONS, CHANGED_ASSETS_PRINT_LIMIT } = require('./constants')
@@ -562,8 +561,6 @@ function createActionParametersFromRequest ({ req, contextItem, actionInputs = {
     if (isRaw) {
       if (isFormData) {
         params.__ow_body = new URLSearchParams(req.body).toString() // convert json back to query string
-      } else if (isJson) {
-        params.__ow_body = Buffer.from(JSON.stringify(req.body)).toString('base64')
       } else {
         params.__ow_body = utils.bodyTransformToRaw(req.body)
       }

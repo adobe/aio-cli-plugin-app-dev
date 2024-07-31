@@ -142,7 +142,7 @@ function bodyTransformToRaw (body) {
     if (!isEmptyObject(body)) {
       if (Buffer.isBuffer(body)) {
         return body.toString('base64')
-      } else {
+      } else { // only choice, must be JSON
         return Buffer.from(JSON.stringify(body)).toString('base64')
       }
     }
