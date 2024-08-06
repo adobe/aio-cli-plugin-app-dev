@@ -24,7 +24,7 @@ const coreLogger = require('@adobe/aio-lib-core-logging')
 const { getReasonPhrase } = require('http-status-codes')
 
 const utils = require('./app-helper')
-const { SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX, BUNDLE_OPTIONS, CHANGED_ASSETS_PRINT_LIMIT } = require('./constants')
+const { SERVER_HOST, SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX, BUNDLE_OPTIONS, CHANGED_ASSETS_PRINT_LIMIT } = require('./constants')
 const RAW_CONTENT_TYPES = ['application/octet-stream', 'multipart/form-data']
 
 /* global Request, Response */
@@ -89,7 +89,7 @@ async function runDev (runOptions, config, _inprocHookRunner) {
     actionUrls = Object.entries(actionUrls).reduce((acc, [key, value]) => {
       const url = new URL(value)
       url.port = serverPort
-      url.hostname = 'localhost'
+      url.hostname = SERVER_HOST
       acc[key] = url.toString()
       return acc
     }, {})
@@ -181,7 +181,7 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   app.all(`/${DEV_API_PREFIX}/*`, (req, res) => serveNonWebAction(req, res, actionConfig))
 
   const server = https.createServer(serverOptions, app)
-  server.listen(serverPort, () => {
+  server.listen(serverPort, SERVER_HOST, () => {
     if (serverPort !== serverPortToUse) {
       serveLogger.info(`Could not use server port ${serverPortToUse}, using port ${serverPort} instead`)
     }
@@ -190,7 +190,7 @@ async function runDev (runOptions, config, _inprocHookRunner) {
 
   let frontendUrl
   if (hasFrontend) {
-    frontendUrl = `${httpsSettings ? 'https:' : 'http:'}//localhost:${serverPort}`
+    frontendUrl = `${httpsSettings ? 'https:' : 'http:'}//${SERVER_HOST}:${serverPort}`
   }
 
   const serverCleanup = async () => {
