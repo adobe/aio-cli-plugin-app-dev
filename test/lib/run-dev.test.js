@@ -51,7 +51,7 @@ jest.mock('node:https', () => {
   return {
     createServer: jest.fn(() => {
       return {
-        listen: jest.fn((_, fn) => {
+        listen: jest.fn((_, __, fn) => {
           fn() // call right away, coverage
         }),
         close: jest.fn()
