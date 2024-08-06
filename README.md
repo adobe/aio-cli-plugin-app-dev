@@ -39,6 +39,15 @@ DESCRIPTION
 _See code: [src/commands/app/dev/index.js](https://github.com/adobe/aio-cli-plugin-app-dev/blob/1.0.1/src/commands/app/dev/index.js)_
 <!-- commandsstop -->
 
+## Overriding the hostname and port
+
+By default the hostname will be `localhost` and the default port is `9080`. You can override these values by setting these environment variables:
+
+1. `SERVER_HOST`
+2. `SERVER_DEFAULT_PORT`
+
+The command will try to use the default port, if it is not available it will find an open port to use instead.
+
 ## Contributing
 
 Contributions are welcomed! Read the [Contributing Guide](CONTRIBUTING.md) for more information.
