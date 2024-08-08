@@ -16,6 +16,7 @@ const https = require('node:https')
 const getPort = require('get-port')
 const open = require('open')
 const chalk = require('chalk')
+const execa = require('execa')
 
 const { Flags, ux } = require('@oclif/core')
 const coreConfig = require('@adobe/aio-lib-core-config')
@@ -136,6 +137,16 @@ class Dev extends BaseCommand {
     }
   }
 
+  async runAppBuild (extensionName) {
+    const command = await this.config.findCommand('app:build')
+    if (command) {
+      this.log('Building the app...')
+      await execa('aio', ['app', 'build', '-e', extensionName, '--no-web-assets'], { cwd: process.cwd() })
+    } else {
+      throw new Error('app:build command was not found')
+    }
+  }
+
   async runOneExtensionPoint (name, config, flags) {
     aioLogger.debug('runOneExtensionPoint called with', name, flags)
 
@@ -179,6 +190,8 @@ class Dev extends BaseCommand {
 
     const inprocHook = this.config.runHook.bind(this.config)
     const cleanup = new Cleanup()
+
+    await this.runAppBuild(name)
     const { frontendUrl, actionUrls, serverCleanup } = await runDev(runOptions, config, inprocHook)
     cleanup.add(() => serverCleanup(), 'cleaning up runDev...')
     cleanup.wait()

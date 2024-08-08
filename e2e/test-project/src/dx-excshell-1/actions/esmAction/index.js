@@ -16,17 +16,11 @@ governing permissions and limitations under the License.
  * @param {object} params the parameters
  * @returns {object} runtime response object
  */
-async function main (params) {
-  if (params.DUMP_PARAMS) {
-    console.log('params', JSON.stringify(params, null, 2))
-  }
-
+export async function main (params) {
   const response = {
     statusCode: 200,
-    body: {
-      params
-    }
+    params,
+    body: 'you were successful with esm'
   }
   return response
 }
-exports.main = main

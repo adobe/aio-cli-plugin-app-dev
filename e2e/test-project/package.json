@@ -17,6 +17,8 @@
     "regenerator-runtime": "^0.13.5"
   },
   "devDependencies": {
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.5.4",
     "@babel/core": "^7.8.7",
     "@babel/plugin-transform-react-jsx": "^7.8.3",
     "@babel/polyfill": "^7.8.7",

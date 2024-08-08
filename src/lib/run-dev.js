@@ -22,6 +22,7 @@ const getPort = require('get-port')
 const rtLib = require('@adobe/aio-lib-runtime')
 const coreLogger = require('@adobe/aio-lib-core-logging')
 const { getReasonPhrase } = require('http-status-codes')
+const path = require('node:path')
 
 const utils = require('./app-helper')
 const { SERVER_HOST, SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX, BUNDLE_OPTIONS, CHANGED_ASSETS_PRINT_LIMIT } = require('./constants')
@@ -62,6 +63,7 @@ const RAW_CONTENT_TYPES = ['application/octet-stream', 'multipart/form-data']
 async function runDev (runOptions, config, _inprocHookRunner) {
   const bundleOptions = cloneDeep(BUNDLE_OPTIONS)
   const devConfig = cloneDeep(config)
+  const distFolder = devConfig.actions.dist
 
   const serveLogger = coreLogger('serve', { level: process.env.LOG_LEVEL, provider: 'winston' })
   serveLogger.debug('config.manifest is', JSON.stringify(devConfig.manifest.full.packages, null, 2))
@@ -168,7 +170,7 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   }
   app.use(express.text({ ...middlewareOptions, type: 'text/plain' }))
   app.use(express.json({ ...middlewareOptions, strict: false }))
-  app.use(express.urlencoded(middlewareOptions))
+  app.use(express.urlencoded({ ...middlewareOptions, extended: true }))
   app.use(express.raw({ ...middlewareOptions, type: RAW_CONTENT_TYPES }))
 
   if (hasFrontend) {
@@ -177,8 +179,8 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   }
 
   // serveAction needs to clear cache for each request, so we get live changes
-  app.all(`/${DEV_API_WEB_PREFIX}/*`, (req, res) => serveWebAction(req, res, actionConfig))
-  app.all(`/${DEV_API_PREFIX}/*`, (req, res) => serveNonWebAction(req, res, actionConfig))
+  app.all(`/${DEV_API_WEB_PREFIX}/*`, (req, res) => serveWebAction(req, res, actionConfig, distFolder))
+  app.all(`/${DEV_API_PREFIX}/*`, (req, res) => serveNonWebAction(req, res, actionConfig, distFolder))
 
   const server = https.createServer(serverOptions, app)
   server.listen(serverPort, SERVER_HOST, () => {
@@ -253,9 +255,10 @@ function isRawWebAction (action) {
  * @param {Request} req the http request
  * @param {Response} res the http response
  * @param {object} actionConfig the action configuration
+ * @param {string} distFolder the dist folder (contains built action source)
  * @returns {void}
  */
-async function serveNonWebAction (req, res, actionConfig) {
+async function serveNonWebAction (req, res, actionConfig, distFolder) {
   const url = req.params[0]
   const [, actionName] = url.split('/')
   const logger = coreLogger(`serveNonWebAction ${actionName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
@@ -322,7 +325,7 @@ async function invokeSequence ({ actionRequestContext, logger }) {
  * @returns {ActionResponse} the action response
  */
 async function invokeAction ({ actionRequestContext, logger }) {
-  const { contextItem: action, contextItemName: actionName, contextItemParams: params } = actionRequestContext
+  const { distFolder, packageName, contextItem: action, contextItemName: actionName, contextItemParams: params } = actionRequestContext
   // check if action is protected
   if (action?.annotations?.['require-adobe-auth']) {
     // http header keys are case-insensitive
@@ -348,7 +351,10 @@ async function invokeAction ({ actionRequestContext, logger }) {
   let actionFunction
   // catch errors when loading the action function
   try {
-    actionFunction = require(action.function)?.main
+    const actionFolder = path.join(distFolder, packageName, actionName)
+    // TODO: find a better way to get the actual folder name without this magic string
+    const actionPath = `${actionFolder}-temp`
+    actionFunction = require(actionPath)?.main
   } catch (e) {
     const message = `${actionName} action not found, or does not export main`
     logger.error(message)
@@ -459,9 +465,10 @@ function httpStatusResponse ({ actionResponse, res, logger }) {
  * @param {Request} req the http request
  * @param {Response} res the http response
  * @param {object} actionConfig the action configuration
+ * @param {string} distFolder the dist folder (contains built action source)
  * @returns {Response} the response
  */
-async function serveWebAction (req, res, actionConfig) {
+async function serveWebAction (req, res, actionConfig, distFolder) {
   const url = req.params[0]
   const [packageName, contextItemName, ...restofPath] = url.split('/')
   const action = actionConfig[packageName]?.actions[contextItemName]
@@ -489,7 +496,8 @@ async function serveWebAction (req, res, actionConfig) {
     packageName,
     contextItemName,
     contextItemParams,
-    actionConfig
+    actionConfig,
+    distFolder
   }
 
   if (invoker) {

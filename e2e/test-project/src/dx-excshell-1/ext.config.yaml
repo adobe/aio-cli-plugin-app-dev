@@ -42,6 +42,7 @@ runtimeManifest:
           runtime: nodejs:18
           inputs:
             LOG_LEVEL: debug
+            DUMP_PARAMS: $DUMP_PARAMS
           annotations:
             final: true
         post-raw-data:
@@ -50,6 +51,7 @@ runtimeManifest:
           runtime: nodejs:18
           inputs:
             LOG_LEVEL: debug
+            DUMP_PARAMS: $DUMP_PARAMS
           annotations:
             final: true
         noAdobeAuth:
@@ -119,6 +121,22 @@ runtimeManifest:
         actionIsNonWeb:
           function: actions/simple/index.js
           web: false
+          runtime: nodejs:18
+          inputs:
+            LOG_LEVEL: debug
+          annotations:
+            final: true
+        esmAction:
+          function: actions/esmAction/index.js
+          web: 'yes'
+          runtime: nodejs:18
+          inputs:
+            LOG_LEVEL: debug
+          annotations:
+            final: true
+        tsAction:
+          function: actions/tsAction/index.ts
+          web: 'yes'
           runtime: nodejs:18
           inputs:
             LOG_LEVEL: debug

@@ -1,0 +1,10 @@
+{
+  "settings": {
+      "jsdoc": {
+          "ignorePrivate": true
+      }
+  },
+  "parserOptions": {
+      "ecmaVersion": "latest"
+  }
+}

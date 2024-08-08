@@ -1,0 +1,4 @@
+{
+  "include": ["src/dx-excshell-1/actions/tsAction"],
+  "exclude": ["node_modules", "dist"]
+}
