@@ -524,7 +524,15 @@ async function serveWebAction (req, res, actionConfig) {
  * defined in the props object, it replaces it with an empty string.
  */
 function interpolate (valueString, props) {
-  // replace ${}, $, and {} with values from props, but not if they are enclosed in quotes
+  // careful with non-string values
+  if (typeof valueString !== 'string') {
+    if (Array.isArray(valueString)) {
+      return valueString.map((value) => interpolate(value, props))
+    } else {
+      return valueString
+    }
+  }
+  // replace ${VAR_NAME}, $VAR_NAME, or {VAR_NAME} with values from props, but not if they are enclosed in quotes
   // if key is not found on props, the value is returned as is (no replacement)
   const retStr = valueString.replace(/(?<!['"`])\$\{(\w+)\}(?!['"`])|(?<!['"`])\$(\w+)(?!['"`])|(?<!['"`])\{(\w+)\}(?!['"`])/g,
     (_, varName1, varName2, varName3) => props[varName1 || varName2 || varName3] || _)
@@ -544,11 +552,7 @@ function createActionParametersFromRequest ({ req, contextItem, actionInputs = {
   // note we clone action so if env vars change between runs it is reflected - jm
   const action = { inputs: {} }
   Object.entries(actionInputs).forEach(([key, value]) => {
-    if (typeof value === 'string') {
-      action.inputs[key] = interpolate(value, process.env)
-    } else {
-      action.inputs[key] = value
-    }
+    action.inputs[key] = interpolate(value, process.env)
   })
 
   const params = {
