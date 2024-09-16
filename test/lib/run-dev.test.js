@@ -21,12 +21,15 @@ const {
   invokeAction, invokeSequence, interpolate, statusCodeMessage, isRawWebAction, isWebAction
 } = require('../../src/lib/run-dev')
 
+const path = require('node:path')
+jest.mock('node:path')
+
 /* eslint no-template-curly-in-string: 0 */
 
 jest.useFakeTimers()
 
 jest.mock('connect-livereload')
-jest.mock('node:path')
+
 jest.mock('fs-extra')
 jest.mock('get-port')
 
@@ -145,6 +148,8 @@ beforeEach(() => {
   mockLogger.mockReset()
   mockGetPort.mockReset()
   mockExpress.mockReset()
+  path.dirname = jest.fn(() => 'dirname')
+  process.chdir = jest.fn()
 })
 
 describe('test interpolate', () => {
@@ -574,6 +579,7 @@ describe('serveWebAction', () => {
     }
 
     await serveWebAction(req, res, actionConfig)
+    expect(process.chdir).toHaveBeenCalledWith('dirname')
     expect(mockSend).toHaveBeenCalledTimes(1)
     expect(mockStatus).toHaveBeenCalledWith(204) // because there is no body
     expect(mockLogger.warn).not.toHaveBeenCalled()

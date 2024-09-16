@@ -13,6 +13,7 @@ governing permissions and limitations under the License.
 const cloneDeep = require('lodash.clonedeep')
 const express = require('express')
 const fs = require('fs-extra')
+const path = require('node:path')
 const https = require('node:https')
 const crypto = require('node:crypto')
 const livereload = require('livereload')
@@ -345,6 +346,7 @@ async function invokeAction ({ actionRequestContext, logger }) {
   // generate an activationID just like openwhisk
   process.env.__OW_ACTIVATION_ID = crypto.randomBytes(16).toString('hex')
   delete require.cache[action.function]
+
   let actionFunction
   // catch errors when loading the action function
   try {
@@ -360,6 +362,7 @@ async function invokeAction ({ actionRequestContext, logger }) {
 
   if (actionFunction) {
     try {
+      process.chdir(path.dirname(action.function))
       process.env.__OW_ACTION_NAME = actionName
       const response = await actionFunction(params)
       delete process.env.__OW_ACTION_NAME
