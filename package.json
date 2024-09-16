@@ -15,7 +15,7 @@
     "@adobe/aio-lib-env": "^3",
     "@adobe/aio-lib-runtime": "^6",
     "@adobe/aio-lib-web": "^7",
-    "@oclif/core": "^3",
+    "@oclif/core": "^4",
     "chalk": "^4",
     "connect-livereload": "^0.6.1",
     "execa": "^5.0.0",
