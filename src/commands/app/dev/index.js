@@ -248,7 +248,7 @@ class Dev extends BaseCommand {
 
     // 2. store them globally in config
     const privateKey = (await fs.readFile(privateKeyPath, { encoding: 'utf8' }))
-    const publicCert = (await fs.readFile(pubCertPath), { encoding: 'utf8' })
+    const publicCert = (await fs.readFile(pubCertPath, { encoding: 'utf8' }))
     coreConfig.set(`${devKeysConfigKey}.privateKey`, privateKey)
     coreConfig.set(`${devKeysConfigKey}.publicCert`, publicCert)
 
