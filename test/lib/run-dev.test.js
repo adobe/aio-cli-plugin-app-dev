@@ -340,6 +340,50 @@ describe('createActionParametersFromRequest', () => {
     })
     delete process.env.mustache
   })
+
+  test('non-string inputs', async () => {
+    const req = createReq({
+      url: 'foo/bar',
+      body: { name: 'world' },
+      headers: {
+        'content-type': 'application/json'
+      }
+    })
+    const packageName = 'foo'
+    const action = {
+      function: fixturePath('actions/successReturnAction.js'),
+      inputs: {
+        someArray: ['hello', 'world'],
+        someBoolean: true,
+        someNumber: 42,
+        someObject: { hello: 'world' },
+        someString: 'hello world'
+      }
+    }
+    const actionName = 'a'
+    const actionConfig = {
+      [packageName]: {
+        actions: {
+          [actionName]: action
+        }
+      }
+    }
+    const actionRequestContext = { action, actionConfig, packageName, actionName }
+
+    const actionParams = await createActionParametersFromRequest({
+      req,
+      actionRequestContext,
+      actionInputs: action.inputs,
+      logger: mockLogger
+    })
+    expect(actionParams).toMatchObject({
+      someArray: ['hello', 'world'],
+      someBoolean: true,
+      someNumber: 42,
+      someObject: { hello: 'world' },
+      someString: 'hello world'
+    })
+  })
 })
 
 describe('isWebAction', () => {
