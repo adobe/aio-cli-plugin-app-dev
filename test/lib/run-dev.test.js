@@ -22,12 +22,15 @@ const {
   invokeAction, invokeSequence, interpolate, statusCodeMessage, isRawWebAction, isWebAction, defaultActionLoader
 } = require('../../src/lib/run-dev')
 
+const path = require('node:path')
+jest.mock('node:path')
+
 /* eslint no-template-curly-in-string: 0 */
 
 jest.useFakeTimers()
 
 jest.mock('connect-livereload')
-jest.mock('node:path')
+
 jest.mock('fs-extra')
 jest.mock('get-port')
 
@@ -157,6 +160,8 @@ beforeEach(() => {
   mockGetPort.mockReset()
   mockExpress.mockReset()
   path.join.mockReset()
+  path.dirname = jest.fn(() => 'dirname')
+  process.chdir = jest.fn()
 })
 
 describe('test interpolate', () => {
@@ -348,6 +353,50 @@ describe('createActionParametersFromRequest', () => {
       doesNotExist: 'value is ${doesNotExist}'
     })
     delete process.env.mustache
+  })
+
+  test('non-string inputs', async () => {
+    const req = createReq({
+      url: 'foo/bar',
+      body: { name: 'world' },
+      headers: {
+        'content-type': 'application/json'
+      }
+    })
+    const packageName = 'foo'
+    const action = {
+      function: fixturePath('actions/successReturnAction.js'),
+      inputs: {
+        someArray: ['hello', 'world'],
+        someBoolean: true,
+        someNumber: 42,
+        someObject: { hello: 'world' },
+        someString: 'hello world'
+      }
+    }
+    const actionName = 'a'
+    const actionConfig = {
+      [packageName]: {
+        actions: {
+          [actionName]: action
+        }
+      }
+    }
+    const actionRequestContext = { action, actionConfig, packageName, actionName }
+
+    const actionParams = await createActionParametersFromRequest({
+      req,
+      actionRequestContext,
+      actionInputs: action.inputs,
+      logger: mockLogger
+    })
+    expect(actionParams).toMatchObject({
+      someArray: ['hello', 'world'],
+      someBoolean: true,
+      someNumber: 42,
+      someObject: { hello: 'world' },
+      someString: 'hello world'
+    })
   })
 })
 
@@ -591,6 +640,7 @@ describe('serveWebAction', () => {
     }
 
     await serveWebAction(req, res, actionConfig, DIST_FOLDER, actionLoader)
+    expect(process.chdir).toHaveBeenCalledWith('dirname')
     expect(mockSend).toHaveBeenCalledTimes(1)
     expect(mockStatus).toHaveBeenCalledWith(204) // because there is no body
     expect(mockLogger.warn).not.toHaveBeenCalled()

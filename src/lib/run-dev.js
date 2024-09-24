@@ -13,6 +13,7 @@ governing permissions and limitations under the License.
 const cloneDeep = require('lodash.clonedeep')
 const express = require('express')
 const fs = require('fs-extra')
+const path = require('node:path')
 const https = require('node:https')
 const crypto = require('node:crypto')
 const livereload = require('livereload')
@@ -363,6 +364,7 @@ async function invokeAction ({ actionRequestContext, logger }) {
   }
   // generate an activationID just like openwhisk
   process.env.__OW_ACTIVATION_ID = crypto.randomBytes(16).toString('hex')
+
   let actionFunction
   try {
     actionFunction = await contextActionLoader({ distFolder, packageName, actionName })
@@ -377,6 +379,7 @@ async function invokeAction ({ actionRequestContext, logger }) {
 
   if (actionFunction) {
     try {
+      process.chdir(path.dirname(action.function))
       process.env.__OW_ACTION_NAME = actionName
       const response = await actionFunction(params)
       delete process.env.__OW_ACTION_NAME
@@ -545,7 +548,15 @@ async function serveWebAction (req, res, actionConfig, distFolder, actionLoader 
  * defined in the props object, it replaces it with an empty string.
  */
 function interpolate (valueString, props) {
-  // replace ${}, $, and {} with values from props, but not if they are enclosed in quotes
+  // careful with non-string values
+  if (typeof valueString !== 'string') {
+    if (Array.isArray(valueString)) {
+      return valueString.map((value) => interpolate(value, props))
+    } else {
+      return valueString
+    }
+  }
+  // replace ${VAR_NAME}, $VAR_NAME, or {VAR_NAME} with values from props, but not if they are enclosed in quotes
   // if key is not found on props, the value is returned as is (no replacement)
   const retStr = valueString.replace(/(?<!['"`])\$\{(\w+)\}(?!['"`])|(?<!['"`])\$(\w+)(?!['"`])|(?<!['"`])\{(\w+)\}(?!['"`])/g,
     (_, varName1, varName2, varName3) => props[varName1 || varName2 || varName3] || _)
