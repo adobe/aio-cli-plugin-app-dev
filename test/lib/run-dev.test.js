@@ -22,7 +22,6 @@ const {
   invokeAction, invokeSequence, interpolate, statusCodeMessage, isRawWebAction, isWebAction, defaultActionLoader
 } = require('../../src/lib/run-dev')
 
-const path = require('node:path')
 jest.mock('node:path')
 
 /* eslint no-template-curly-in-string: 0 */
