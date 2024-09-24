@@ -23,7 +23,6 @@ const getPort = require('get-port')
 const rtLib = require('@adobe/aio-lib-runtime')
 const coreLogger = require('@adobe/aio-lib-core-logging')
 const { getReasonPhrase } = require('http-status-codes')
-const path = require('node:path')
 
 const utils = require('./app-helper')
 const { SERVER_HOST, SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX, BUNDLE_OPTIONS, CHANGED_ASSETS_PRINT_LIMIT } = require('./constants')
