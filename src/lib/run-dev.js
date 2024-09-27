@@ -327,7 +327,7 @@ async function invokeSequence ({ actionRequestContext, logger }) {
  */
 async function defaultActionLoader ({ distFolder, packageName, actionName }) {
   const actionFolder = path.join(distFolder, packageName, actionName)
-  const actionPath = `${actionFolder}-temp`
+  const actionPath = `${actionFolder}-temp/index.js`
   delete require.cache[actionPath]
   return require(actionPath)?.main
 }

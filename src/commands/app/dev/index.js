@@ -140,7 +140,7 @@ class Dev extends BaseCommand {
 
   async runAppBuild (extensionConfig) {
     this.log('Building the app...')
-    await buildActions(extensionConfig, null /* filterActions[] */, true /* skipCheck */)
+    await buildActions(extensionConfig, null /* filterActions[] */, false /* skipCheck */)
   }
 
   async runOneExtensionPoint (name, config, flags) {
