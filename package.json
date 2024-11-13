@@ -76,5 +76,8 @@
     "postpack": "rm -f oclif.manifest.json",
     "version": "oclif readme && git add README.md",
     "e2e": "jest --detectOpenHandles -c e2e/jest.e2e.config.js"
+  },
+  "overrides": {
+    "uri-js": "npm:fast-uri@^3.0.3"
   }
 }
