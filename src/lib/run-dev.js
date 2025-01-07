@@ -180,7 +180,7 @@ async function runDev (runOptions, config, _inprocHookRunner) {
 
   // serveAction needs to clear cache for each request, so we get live changes
   app.all(`/${DEV_API_WEB_PREFIX}/*`, (req, res) => serveWebAction(req, res, actionConfig, distFolder))
-  app.all(`/${DEV_API_PREFIX}/*`, (req, res) => serveNonWebAction(req, res, actionConfig, distFolder))
+  app.all(`/${DEV_API_PREFIX}/*`, (req, res) => serveWebAction(req, res, actionConfig, distFolder))
 
   const server = https.createServer(serverOptions, app)
   server.listen(serverPort, SERVER_HOST, () => {
@@ -246,25 +246,6 @@ function isRawWebAction (action) {
   const webValue = action?.web
 
   return (webExportValue === raw || webValue === raw)
-}
-
-/**
- * Express path handler to handle non-web action or non-web sequence API calls.
- * Openwhisk returns 401 when you call a non-web action or non-web sequence via HTTP.
- *
- * @param {Request} req the http request
- * @param {Response} res the http response
- * @param {object} actionConfig the action configuration
- * @param {string} distFolder the dist folder (contains built action source)
- * @returns {void}
- */
-async function serveNonWebAction (req, res, actionConfig, distFolder) {
-  const url = req.params[0]
-  const [, actionName] = url.split('/')
-  const logger = coreLogger(`serveNonWebAction ${actionName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
-
-  const actionResponse = { statusCode: 401, body: { error: 'The resource requires authentication, which was not supplied with the request' } }
-  return httpStatusResponse({ actionResponse, res, logger })
 }
 
 /**
@@ -485,7 +466,7 @@ function httpStatusResponse ({ actionResponse, res, logger }) {
 async function serveWebAction (req, res, actionConfig, distFolder, actionLoader = defaultActionLoader) {
   const url = req.params[0]
   const [packageName, contextItemName, ...restofPath] = url.split('/')
-  const action = actionConfig[packageName]?.actions[contextItemName]
+  const action = actionConfig[packageName]?.actions?.[contextItemName]
   const sequence = actionConfig[packageName]?.sequences?.[contextItemName]
   const owPath = restofPath.join('/')
 
@@ -515,12 +496,10 @@ async function serveWebAction (req, res, actionConfig, distFolder, actionLoader 
     contextActionLoader: actionLoader
   }
 
-  if (invoker) {
+  if (invoker && !sequence) {
     if (!isWebAction(contextItem)) {
-      const actionResponse = { statusCode: 404, body: { error: 'The requested resource does not exist.' } }
-      return httpStatusResponse({ actionResponse, res, logger: actionLogger })
+      actionLogger.warn('serving non-web action : this call will fail without credentials when deployed.')
     }
-
     actionRequestContext.contextItem = contextItem
     const actionResponse = await invoker({ actionRequestContext, logger: actionLogger })
     actionLogger.debug('response for', contextItemName, JSON.stringify(actionResponse, null, 2))
@@ -615,7 +594,6 @@ module.exports = {
   runDev,
   interpolate,
   serveWebAction,
-  serveNonWebAction,
   httpStatusResponse,
   invokeAction,
   invokeSequence,
