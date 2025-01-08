@@ -73,6 +73,8 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   const hasBackend = devConfig.app.hasBackend
   const httpsSettings = runOptions?.parcel?.https
 
+  // actionConfig.strictMode = runOptions.strictMode
+
   serveLogger.debug('hasBackend', hasBackend)
   serveLogger.debug('hasFrontend', hasFrontend)
   serveLogger.debug('httpsSettings', JSON.stringify(httpsSettings, null, 2))
@@ -495,8 +497,8 @@ async function serveWebAction (req, res, actionConfig, distFolder, actionLoader 
     distFolder,
     contextActionLoader: actionLoader
   }
-
-  if (invoker && !sequence) {
+  console.log('actionConfig.strictMode =', actionConfig.strictMode)
+  if (invoker && !sequence && !actionConfig.strictMode) {
     if (!isWebAction(contextItem)) {
       actionLogger.warn('serving non-web action : this call will fail without credentials when deployed.')
     }
