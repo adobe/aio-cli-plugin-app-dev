@@ -273,6 +273,7 @@ async function invokeSequence ({ actionRequestContext, logger }) {
       : {
           __ow_headers: sequenceParams.__ow_headers,
           __ow_method: sequenceParams.__ow_method,
+          ...actionConfig?.[packageName]?.inputs,
           ...action?.inputs,
           ...lastActionResponse
         }
@@ -469,6 +470,7 @@ async function serveWebAction (req, res, actionConfig, distFolder, actionLoader 
   const action = actionConfig[packageName]?.actions?.[contextItemName]
   const sequence = actionConfig[packageName]?.sequences?.[contextItemName]
   const owPath = restofPath.join('/')
+  const combinedInputs = { ...actionConfig?.[packageName]?.inputs, ...action?.inputs }
 
   let invoker, contextItem
 
@@ -483,7 +485,7 @@ async function serveWebAction (req, res, actionConfig, distFolder, actionLoader 
   }
 
   const actionLogger = coreLogger(`serveWebAction ${contextItemName}`, { level: process.env.LOG_LEVEL, provider: 'winston' })
-  const contextItemParams = createActionParametersFromRequest({ req, contextItem, actionInputs: action?.inputs })
+  const contextItemParams = createActionParametersFromRequest({ req, contextItem, actionInputs: combinedInputs })
   contextItemParams.__ow_path = owPath
   actionLogger.debug('contextItemParams =', contextItemParams)
 
