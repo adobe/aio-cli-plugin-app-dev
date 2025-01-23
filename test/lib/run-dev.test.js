@@ -644,7 +644,7 @@ describe('serveWebAction', () => {
     const actionLoader = () => {
       return (params) => {
         return {
-          body: params,
+          body: params
         }
       }
     }
@@ -653,7 +653,7 @@ describe('serveWebAction', () => {
       [packageName]: {
         inputs: {
           packageInputB: 'input-b',
-          packageInputC: 'input-c',
+          packageInputC: 'input-c'
         },
         actions: {
           bar: {
@@ -661,7 +661,7 @@ describe('serveWebAction', () => {
             web: true,
             inputs: {
               actionInputA: 'input-a',
-              packageInputC: 'input-c-override',
+              packageInputC: 'input-c-override'
             }
           }
         }
@@ -673,10 +673,10 @@ describe('serveWebAction', () => {
     expect(mockSend).toHaveBeenCalledTimes(1)
 
     // Validate inputs
-    const responseBody = mockSend.mock.calls[0][0];
-    expect(responseBody.actionInputA).toBe('input-a');
-    expect(responseBody.packageInputB).toBe('input-b');
-    expect(responseBody.packageInputC).toBe('input-c-override');
+    const responseBody = mockSend.mock.calls[0][0]
+    expect(responseBody.actionInputA).toBe('input-a')
+    expect(responseBody.packageInputB).toBe('input-b')
+    expect(responseBody.packageInputC).toBe('input-c-override')
 
     expect(mockStatus).toHaveBeenCalledWith(200)
     expect(mockLogger.warn).not.toHaveBeenCalled()
@@ -914,25 +914,25 @@ describe('invokeSequence', () => {
   test('subsequent action in sequence receives package-level inputs', async () => {
     const packageName = 'foo'
     const actionPath = fixturePath('actions/successNoReturnAction.js')
-    
-    const mockAction = jest.fn();
-    mockAction.mockReturnValue(null);
 
-    const actionLoader = () => mockAction;
+    const mockAction = jest.fn()
+    mockAction.mockReturnValue(null)
+
+    const actionLoader = () => mockAction
 
     const sequence = { actions: 'a, b' }
     const actionConfig = {
       [packageName]: {
         inputs: {
           packageInputB: 'input-b',
-          packageInputC: 'input-c',
+          packageInputC: 'input-c'
         },
         actions: {
           a: { function: actionPath },
           b: {
             inputs: {
               actionInputA: 'input-a',
-              packageInputC: 'input-c-override',
+              packageInputC: 'input-c-override'
             },
             function: actionPath
           }
@@ -948,12 +948,12 @@ describe('invokeSequence', () => {
       actionConfig
     }
     const response = await invokeSequence({ actionRequestContext, logger: mockLogger })
-    expect(mockAction).toHaveBeenCalledTimes(2);
-    
-    const params = mockAction.mock.calls[1][0];
-    expect(params.actionInputA).toBe('input-a');
-    expect(params.packageInputB).toBe('input-b');
-    expect(params.packageInputC).toBe('input-c-override');
+    expect(mockAction).toHaveBeenCalledTimes(2)
+
+    const params = mockAction.mock.calls[1][0]
+    expect(params.actionInputA).toBe('input-a')
+    expect(params.packageInputB).toBe('input-b')
+    expect(params.packageInputC).toBe('input-c-override')
 
     expect(response).toMatchObject({
       body: '',

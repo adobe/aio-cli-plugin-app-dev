@@ -470,7 +470,7 @@ async function serveWebAction (req, res, actionConfig, distFolder, actionLoader 
   const action = actionConfig[packageName]?.actions?.[contextItemName]
   const sequence = actionConfig[packageName]?.sequences?.[contextItemName]
   const owPath = restofPath.join('/')
-  const combinedInputs = { ... actionConfig?.[packageName]?.inputs, ... action?.inputs };
+  const combinedInputs = { ...actionConfig?.[packageName]?.inputs, ...action?.inputs }
 
   let invoker, contextItem
 
