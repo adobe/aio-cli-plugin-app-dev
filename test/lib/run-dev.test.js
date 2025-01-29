@@ -633,6 +633,55 @@ describe('serveWebAction', () => {
     expect(mockLogger.warn).not.toHaveBeenCalled()
   })
 
+  test('action with package-level inputs', async () => {
+    const mockStatus = jest.fn()
+    const mockSend = jest.fn()
+
+    const res = createRes({ mockStatus, mockSend })
+    const req = createReq({ url: 'foo/bar' })
+    const packageName = 'foo'
+    const actionPath = fixturePath('actions/successNoReturnAction.js')
+    const actionLoader = () => {
+      return (params) => {
+        return {
+          body: params
+        }
+      }
+    }
+
+    const actionConfig = {
+      [packageName]: {
+        inputs: {
+          packageInputB: 'input-b',
+          packageInputC: 'input-c'
+        },
+        actions: {
+          bar: {
+            function: actionPath,
+            web: true,
+            inputs: {
+              actionInputA: 'input-a',
+              packageInputC: 'input-c-override'
+            }
+          }
+        }
+      }
+    }
+
+    await serveWebAction(req, res, actionConfig, DIST_FOLDER, actionLoader)
+    expect(process.chdir).toHaveBeenCalledWith('dirname')
+    expect(mockSend).toHaveBeenCalledTimes(1)
+
+    // Validate inputs
+    const responseBody = mockSend.mock.calls[0][0]
+    expect(responseBody.actionInputA).toBe('input-a')
+    expect(responseBody.packageInputB).toBe('input-b')
+    expect(responseBody.packageInputC).toBe('input-c-override')
+
+    expect(mockStatus).toHaveBeenCalledWith(200)
+    expect(mockLogger.warn).not.toHaveBeenCalled()
+  })
+
   test('action found, is raw web action', async () => {
     const mimeType = 'multipart/form-data'
     const mockStatus = jest.fn()
@@ -856,6 +905,56 @@ describe('invokeSequence', () => {
       actionConfig
     }
     const response = await invokeSequence({ actionRequestContext, logger: mockLogger })
+    expect(response).toMatchObject({
+      body: '',
+      statusCode: 204
+    })
+  })
+
+  test('subsequent action in sequence receives package-level inputs', async () => {
+    const packageName = 'foo'
+    const actionPath = fixturePath('actions/successNoReturnAction.js')
+
+    const mockAction = jest.fn()
+    mockAction.mockReturnValue(null)
+
+    const actionLoader = () => mockAction
+
+    const sequence = { actions: 'a, b' }
+    const actionConfig = {
+      [packageName]: {
+        inputs: {
+          packageInputB: 'input-b',
+          packageInputC: 'input-c'
+        },
+        actions: {
+          a: { function: actionPath },
+          b: {
+            inputs: {
+              actionInputA: 'input-a',
+              packageInputC: 'input-c-override'
+            },
+            function: actionPath
+          }
+        }
+      }
+    }
+
+    const actionRequestContext = {
+      contextActionLoader: actionLoader,
+      contextItem: sequence,
+      contextItemParams: {},
+      packageName,
+      actionConfig
+    }
+    const response = await invokeSequence({ actionRequestContext, logger: mockLogger })
+    expect(mockAction).toHaveBeenCalledTimes(2)
+
+    const params = mockAction.mock.calls[1][0]
+    expect(params.actionInputA).toBe('input-a')
+    expect(params.packageInputB).toBe('input-b')
+    expect(params.packageInputC).toBe('input-c-override')
+
     expect(response).toMatchObject({
       body: '',
       statusCode: 204
