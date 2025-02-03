@@ -28,7 +28,7 @@
     "livereload": "^0.9.3",
     "lodash.clonedeep": "^4.5.0",
     "open": "^10.1.0",
-    "ora": "^5",
+    "ora": "^8",
     "upath": "^2.0.1"
   },
   "devDependencies": {
