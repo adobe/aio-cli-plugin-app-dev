@@ -87,8 +87,10 @@ async function runDev (runOptions, config, _inprocHookRunner) {
 
   let actionUrls = {}
   if (hasBackend) {
-    actionUrls = rtLib.utils.getActionUrls(devConfig, true /* isRemoteDev */, false /* isLocalDev */, false /* legacy */)
-    actionUrls = Object.entries(actionUrls).reduce((acc, [key, value]) => {
+    // note: 3rd arg, _isLocalDev is not used in RuntimeLib
+    // there is no such thing as --local anymore
+    const tempActionUrls = rtLib.utils.getActionUrls(devConfig, true /* isRemoteDev */, false /* isLocalDev */, false /* legacy */)
+    actionUrls = Object.entries(tempActionUrls).reduce((acc, [key, value]) => {
       const url = new URL(value)
       url.port = serverPort
       url.hostname = SERVER_HOST
