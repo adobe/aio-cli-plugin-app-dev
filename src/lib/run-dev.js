@@ -361,7 +361,7 @@ async function invokeAction ({ actionRequestContext, logger }) {
   if (actionFunction) {
     try {
       process.chdir(path.dirname(action.function))
-      process.env.__OW_ACTION_NAME = actionName
+      process.env.__OW_ACTION_NAME = `/${process.env.__OW_NAMESPACE}/${packageName}/${actionName}`
       const response = await actionFunction(params)
       delete process.env.__OW_ACTION_NAME
 
