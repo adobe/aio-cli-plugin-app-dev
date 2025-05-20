@@ -84,7 +84,7 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   // set up environment variables for aio
   // this can be read as truthy, it will not exist in Runtime
   // console.log('AIO_DEV ', process.env.AIO_DEV ? 'dev' : 'prod')
-  process.env.AIO_DEV = true
+  process.env.AIO_DEV = 'true'
 
   const serverPortToUse = parseInt(process.env.PORT) || SERVER_DEFAULT_PORT
   const serverPort = await getPort({ port: serverPortToUse })
