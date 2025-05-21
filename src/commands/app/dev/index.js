@@ -156,6 +156,7 @@ class Dev extends BaseCommand {
     const runOptions = {
       skipActions: false,
       skipServe: false,
+      strictMode: flags.strict,
       parcel: {
         logLevel: flags.verbose ? 'verbose' : 'warn',
         // always set to false on localhost to get debugging and hot reloading
@@ -298,6 +299,10 @@ Dev.flags = {
     description: 'Open the default web browser after a successful run, only valid if your app has a front-end',
     default: false,
     char: 'o'
+  }),
+  strict: Flags.boolean({
+    description: 'Run in strict mode, this will block non-web actions from being run directly',
+    defaullt: false
   }),
   extension: Flags.string({
     description: 'Run only a specific extension, this flag can only be specified once',
