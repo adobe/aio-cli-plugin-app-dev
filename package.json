@@ -27,7 +27,7 @@
     "inquirer": "^12",
     "livereload": "^0.9.3",
     "lodash.clonedeep": "^4.5.0",
-    "open": "^10.1.0",
+    "open": "^8.4.2",
     "ora": "^5",
     "upath": "^2.0.1"
   },
