@@ -353,6 +353,7 @@ async function invokeAction ({ actionRequestContext, logger }) {
   // if we run an action, we will restore the process.env after the call
   // we must do this before we load the action because code can execute on require/import
   const preCallEnv = cloneDeep(process.env)
+  const originalCwd = process.cwd()
   // generate an activationID just like openwhisk
   process.env.__OW_ACTIVATION_ID = crypto.randomBytes(16).toString('hex')
 
@@ -371,14 +372,10 @@ async function invokeAction ({ actionRequestContext, logger }) {
   if (actionFunction) {
     try {
       // get cwd and process.env before changing it, so we can restore it later
-      const originalCwd = process.cwd()
       process.chdir(path.dirname(action.function))
       process.env.__OW_ACTION_NAME = `/${process.env.__OW_NAMESPACE}/${packageName}/${actionName}`
       const response = await actionFunction(params)
       delete process.env.__OW_ACTION_NAME
-      logger.debug('restoring process.env and cwd')
-      process.env = preCallEnv // restore the environment variables
-      process.chdir(originalCwd) // restore the original working directory
 
       let statusCode, headers, body
 
@@ -426,6 +423,10 @@ async function invokeAction ({ actionRequestContext, logger }) {
         statusCode,
         body: { error: 'Response is not valid \'message/http\'.' }
       }
+    } finally {
+      logger.debug('restoring process.env and cwd')
+      process.env = preCallEnv // restore the environment variables
+      process.chdir(originalCwd) // restore the original working directory
     }
   } else {
     // this case the action returned an error object, so we should use it
