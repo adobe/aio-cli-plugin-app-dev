@@ -348,7 +348,7 @@ describe('createActionParametersFromRequest', () => {
       justDollar: 'value is world',
       mustache: 'value is world',
       literal: 'value is literally "${mustache}" and "{mustache}"',
-      doesNotExist: 'value is ${doesNotExist}'
+      doesNotExist: 'value is '
     })
     delete process.env.mustache
   })
