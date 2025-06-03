@@ -371,7 +371,6 @@ async function invokeAction ({ actionRequestContext, logger }) {
 
   if (actionFunction) {
     try {
-      // get cwd and process.env before changing it, so we can restore it later
       process.chdir(path.dirname(action.function))
       process.env.__OW_ACTION_NAME = `/${process.env.__OW_NAMESPACE}/${packageName}/${actionName}`
       const response = await actionFunction(params)
