@@ -554,7 +554,10 @@ function interpolate (valueString, props) {
   // replace ${VAR_NAME}, $VAR_NAME, or {VAR_NAME} with values from props, but not if they are enclosed in quotes
   // if key is not found on props, the value is returned as is (no replacement)
   const retStr = valueString.replace(/(?<!['"`])\$\{(\w+)\}(?!['"`])|(?<!['"`])\$(\w+)(?!['"`])|(?<!['"`])\{(\w+)\}(?!['"`])/g,
-    (_, varName1, varName2, varName3) => props[varName1 || varName2 || varName3] || _)
+    (_, varName1, varName2, varName3) => {
+      const varName = varName1 || varName2 || varName3
+      return Object.prototype.hasOwnProperty.call(props, varName) ? props[varName] : ''
+    })
   return retStr
 }
 
