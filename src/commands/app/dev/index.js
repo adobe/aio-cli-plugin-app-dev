@@ -145,7 +145,7 @@ class Dev extends BaseCommand {
 
   async runAppBuild (extensionConfig) {
     this.log('Building the app...')
-    if (extensionConfig.hasBackend) {
+    if (extensionConfig.app.hasBackend) {
       await buildActions(extensionConfig, null /* filterActions[] */, false /* skipCheck */)
     }
   }
