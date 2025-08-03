@@ -66,9 +66,9 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   const distFolder = devConfig.actions.dist
 
   const serveLogger = coreLogger('serve', { level: process.env.LOG_LEVEL, provider: 'winston' })
-  serveLogger.debug('config.manifest is', JSON.stringify(devConfig.manifest.full.packages, null, 2))
+  serveLogger.debug('config.manifest is', JSON.stringify(devConfig.manifest?.full?.packages, null, 2))
 
-  const actionConfig = devConfig.manifest.full.packages
+  const actionConfig = devConfig.manifest?.full?.packages
   const hasFrontend = devConfig.app.hasFrontend
   const hasBackend = devConfig.app.hasBackend
   const httpsSettings = runOptions?.parcel?.https
@@ -117,55 +117,51 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   if (hasFrontend) {
     const liveReloadServer = livereload.createServer({ https: serverOptions })
     liveReloadServer.watch(devConfig.web.distDev)
+    serveLogger.info(`Watching web folder ${devConfig.web.distDev}...`)
     liveReloadServer.server.once('connection', () => {
       setTimeout(() => {
         liveReloadServer.refresh('/')
       }, 100)
     })
 
-    try {
-      utils.writeConfig(devConfig.web.injectedConfig, actionUrls)
+    utils.writeConfig(devConfig.web.injectedConfig, actionUrls)
 
-      const bundlerPortToUse = parseInt(process.env.BUNDLER_PORT) || BUNDLER_DEFAULT_PORT
-      const bundlerPort = await getPort({ port: bundlerPortToUse })
+    const bundlerPortToUse = parseInt(process.env.BUNDLER_PORT) || BUNDLER_DEFAULT_PORT
+    const bundlerPort = await getPort({ port: bundlerPortToUse })
 
-      if (bundlerPort !== bundlerPortToUse) {
-        serveLogger.info(`Could not use bundler port ${bundlerPortToUse}, using port ${bundlerPort} instead`)
-      }
-
-      const entries = devConfig.web.src + '/**/*.html'
-      bundleOptions.serveOptions = {
-        port: bundlerPort,
-        https: httpsSettings
-      }
-
-      const bundler = await bundle(entries, devConfig.web.distDev, bundleOptions, serveLogger.debug.bind(serveLogger))
-      await bundler.run() // run it once
-
-      subscription = await bundler.watch((err, event) => {
-        if (err) {
-          // fatal error
-          throw err
-        }
-
-        serveLogger.info(`${event.changedAssets.size} static asset(s) changed`)
-        const limit = runOptions.verbose ? Infinity : CHANGED_ASSETS_PRINT_LIMIT
-        if (event.changedAssets.size <= limit) {
-          event.changedAssets.forEach((value, key, map) => {
-            serveLogger.info('\t-->', value)
-          })
-        }
-        if (event.type === 'buildSuccess') {
-          const bundles = event.bundleGraph.getBundles()
-          serveLogger.info(`✨ Built ${bundles.length} bundles in ${event.buildTime}ms!`)
-        } else if (event.type === 'buildFailure') {
-          serveLogger.error(event.diagnostics)
-        }
-      })
-    } catch (err) {
-      console.error(err)
-      serveLogger.error(err.diagnostics)
+    if (bundlerPort !== bundlerPortToUse) {
+      serveLogger.info(`Could not use bundler port ${bundlerPortToUse}, using port ${bundlerPort} instead`)
     }
+
+    const entries = devConfig.web.src + '/**/*.html'
+    bundleOptions.serveOptions = {
+      port: bundlerPort,
+      https: httpsSettings
+    }
+
+    const bundler = await bundle(entries, devConfig.web.distDev, bundleOptions, serveLogger.debug.bind(serveLogger))
+    await bundler.run() // run it once
+
+    subscription = await bundler.watch((err, event) => {
+      if (err) {
+        // fatal error
+        throw err
+      }
+
+      serveLogger.info(`${event.changedAssets.size} static asset(s) changed`)
+      const limit = runOptions.verbose ? Infinity : CHANGED_ASSETS_PRINT_LIMIT
+      if (event.changedAssets.size <= limit) {
+        event.changedAssets.forEach((value, key, map) => {
+          serveLogger.info('\t-->', value)
+        })
+      }
+      if (event.type === 'buildSuccess') {
+        const bundles = event.bundleGraph.getBundles()
+        serveLogger.info(`✨ Built ${bundles.length} bundles in ${event.buildTime}ms!`)
+      } else if (event.type === 'buildFailure') {
+        serveLogger.error(event.diagnostics)
+      }
+    })
   }
 
   const app = express()
