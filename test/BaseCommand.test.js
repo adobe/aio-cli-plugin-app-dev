@@ -182,6 +182,15 @@ describe('catch', () => {
     expect(command.error).toHaveBeenCalledWith(expect.stringContaining(errorList.join('\n')))
   })
 
+  test('will handle errors with diagnostics property when using --verbose flag', async () => {
+    command.argv = ['--verbose']
+    const errorWithDiagnostics = new Error('fake error')
+    errorWithDiagnostics.diagnostics = { some: 'property ' }
+    await command.catch(errorWithDiagnostics)
+
+    expect(command.error).toHaveBeenCalledWith(expect.stringContaining('fake error'))
+  })
+
   test('will handle errors without stack traces when using --verbose flag', async () => {
     command.argv = ['--verbose']
     const errorWithoutStack = new Error('fake error')
