@@ -13,7 +13,27 @@
 
 ## Commands
 <!-- commands -->
+* [`aio app dev`](#aio-app-dev)
 
+## `aio app dev`
+
+Run your App Builder app locally
+
+```
+USAGE
+  $ aio app dev [-v] [--version] [-o] [-e <value>]
+
+FLAGS
+  -e, --extension=<value>  Run only a specific extension, this flag can only be specified once
+  -o, --open               Open the default web browser after a successful run, only valid if your app has a front-end
+  -v, --verbose            Verbose output
+      --version            Show version
+
+DESCRIPTION
+  Run your App Builder app locally
+```
+
+_See code: [src/commands/app/dev/index.js](https://github.com/adobe/aio-cli-plugin-app-dev/blob/2.1.2/src/commands/app/dev/index.js)_
 <!-- commandsstop -->
 
 ## Overriding the hostname and port
