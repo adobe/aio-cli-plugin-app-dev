@@ -66,9 +66,9 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   const distFolder = devConfig.actions.dist
 
   const serveLogger = coreLogger('serve', { level: process.env.LOG_LEVEL, provider: 'winston' })
-  serveLogger.debug('config.manifest is', JSON.stringify(devConfig.manifest.full.packages, null, 2))
+  serveLogger.debug('config.manifest is', JSON.stringify(devConfig.manifest?.full?.packages, null, 2))
 
-  const actionConfig = devConfig.manifest.full.packages
+  const actionConfig = devConfig.manifest?.full?.packages
   const hasFrontend = devConfig.app.hasFrontend
   const hasBackend = devConfig.app.hasBackend
   const httpsSettings = runOptions?.parcel?.https
@@ -83,14 +83,20 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   process.env.__OW_API_KEY = process.env.AIO_RUNTIME_AUTH
   process.env.__OW_NAMESPACE = process.env.AIO_RUNTIME_NAMESPACE
   process.env.__OW_API_HOST = process.env.AIO_RUNTIME_APIHOST
+  // set up environment variables for aio
+  // this can be read as truthy, it will not exist in Runtime
+  // ex. console.log('AIO_DEV ', process.env.AIO_DEV ? 'dev' : 'prod')
+  process.env.AIO_DEV = 'true'
 
   const serverPortToUse = parseInt(process.env.PORT) || SERVER_DEFAULT_PORT
   const serverPort = await getPort({ port: serverPortToUse })
 
   let actionUrls = {}
   if (hasBackend) {
-    actionUrls = rtLib.utils.getActionUrls(devConfig, true /* isRemoteDev */, false /* isLocalDev */, false /* legacy */)
-    actionUrls = Object.entries(actionUrls).reduce((acc, [key, value]) => {
+    // note: 3rd arg, _isLocalDev is not used in RuntimeLib
+    // there is no such thing as --local anymore
+    const tempActionUrls = rtLib.utils.getActionUrls(devConfig, true /* isRemoteDev */, false /* isLocalDev */, false /* legacy */)
+    actionUrls = Object.entries(tempActionUrls).reduce((acc, [key, value]) => {
       const url = new URL(value)
       url.port = serverPort
       url.hostname = SERVER_HOST
@@ -113,55 +119,51 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   if (hasFrontend) {
     const liveReloadServer = livereload.createServer({ https: serverOptions })
     liveReloadServer.watch(devConfig.web.distDev)
+    serveLogger.info(`Watching web folder ${devConfig.web.distDev}...`)
     liveReloadServer.server.once('connection', () => {
       setTimeout(() => {
         liveReloadServer.refresh('/')
       }, 100)
     })
 
-    try {
-      utils.writeConfig(devConfig.web.injectedConfig, actionUrls)
+    utils.writeConfig(devConfig.web.injectedConfig, actionUrls)
 
-      const bundlerPortToUse = parseInt(process.env.BUNDLER_PORT) || BUNDLER_DEFAULT_PORT
-      const bundlerPort = await getPort({ port: bundlerPortToUse })
+    const bundlerPortToUse = parseInt(process.env.BUNDLER_PORT) || BUNDLER_DEFAULT_PORT
+    const bundlerPort = await getPort({ port: bundlerPortToUse })
 
-      if (bundlerPort !== bundlerPortToUse) {
-        serveLogger.info(`Could not use bundler port ${bundlerPortToUse}, using port ${bundlerPort} instead`)
-      }
-
-      const entries = devConfig.web.src + '/**/*.html'
-      bundleOptions.serveOptions = {
-        port: bundlerPort,
-        https: httpsSettings
-      }
-
-      const bundler = await bundle(entries, devConfig.web.distDev, bundleOptions, serveLogger.debug.bind(serveLogger))
-      await bundler.run() // run it once
-
-      subscription = await bundler.watch((err, event) => {
-        if (err) {
-          // fatal error
-          throw err
-        }
-
-        serveLogger.info(`${event.changedAssets.size} static asset(s) changed`)
-        const limit = runOptions.verbose ? Infinity : CHANGED_ASSETS_PRINT_LIMIT
-        if (event.changedAssets.size <= limit) {
-          event.changedAssets.forEach((value, key, map) => {
-            serveLogger.info('\t-->', value)
-          })
-        }
-        if (event.type === 'buildSuccess') {
-          const bundles = event.bundleGraph.getBundles()
-          serveLogger.info(`✨ Built ${bundles.length} bundles in ${event.buildTime}ms!`)
-        } else if (event.type === 'buildFailure') {
-          serveLogger.error(event.diagnostics)
-        }
-      })
-    } catch (err) {
-      console.error(err)
-      serveLogger.error(err.diagnostics)
+    if (bundlerPort !== bundlerPortToUse) {
+      serveLogger.info(`Could not use bundler port ${bundlerPortToUse}, using port ${bundlerPort} instead`)
     }
+
+    const entries = devConfig.web.src + '/**/*.html'
+    bundleOptions.serveOptions = {
+      port: bundlerPort,
+      https: httpsSettings
+    }
+
+    const bundler = await bundle(entries, devConfig.web.distDev, bundleOptions, serveLogger.debug.bind(serveLogger))
+    await bundler.run() // run it once
+
+    subscription = await bundler.watch((err, event) => {
+      if (err) {
+        // fatal error
+        throw err
+      }
+
+      serveLogger.info(`${event.changedAssets.size} static asset(s) changed`)
+      const limit = runOptions.verbose ? Infinity : CHANGED_ASSETS_PRINT_LIMIT
+      if (event.changedAssets.size <= limit) {
+        event.changedAssets.forEach((value, key, map) => {
+          serveLogger.info('\t-->', value)
+        })
+      }
+      if (event.type === 'buildSuccess') {
+        const bundles = event.bundleGraph.getBundles()
+        serveLogger.info(`✨ Built ${bundles.length} bundles in ${event.buildTime}ms!`)
+      } else if (event.type === 'buildFailure') {
+        serveLogger.error(event.diagnostics)
+      }
+    })
   }
 
   const app = express()
@@ -345,6 +347,11 @@ async function invokeAction ({ actionRequestContext, logger }) {
       }
     }
   }
+
+  // if we run an action, we will restore the process.env after the call
+  // we must do this before we load the action because code can execute on require/import
+  const preCallEnv = { ...process.env }
+  const originalCwd = process.cwd()
   // generate an activationID just like openwhisk
   process.env.__OW_ACTIVATION_ID = crypto.randomBytes(16).toString('hex')
 
@@ -363,7 +370,7 @@ async function invokeAction ({ actionRequestContext, logger }) {
   if (actionFunction) {
     try {
       process.chdir(path.dirname(action.function))
-      process.env.__OW_ACTION_NAME = actionName
+      process.env.__OW_ACTION_NAME = `/${process.env.__OW_NAMESPACE}/${packageName}/${actionName}`
       const response = await actionFunction(params)
       delete process.env.__OW_ACTION_NAME
 
@@ -413,6 +420,10 @@ async function invokeAction ({ actionRequestContext, logger }) {
         statusCode,
         body: { error: 'Response is not valid \'message/http\'.' }
       }
+    } finally {
+      logger.debug('restoring process.env and cwd')
+      process.env = preCallEnv // restore the environment variables
+      process.chdir(originalCwd) // restore the original working directory
     }
   } else {
     // this case the action returned an error object, so we should use it
@@ -540,7 +551,10 @@ function interpolate (valueString, props) {
   // replace ${VAR_NAME}, $VAR_NAME, or {VAR_NAME} with values from props, but not if they are enclosed in quotes
   // if key is not found on props, the value is returned as is (no replacement)
   const retStr = valueString.replace(/(?<!['"`])\$\{(\w+)\}(?!['"`])|(?<!['"`])\$(\w+)(?!['"`])|(?<!['"`])\{(\w+)\}(?!['"`])/g,
-    (_, varName1, varName2, varName3) => props[varName1 || varName2 || varName3] || _)
+    (_, varName1, varName2, varName3) => {
+      const varName = varName1 || varName2 || varName3
+      return Object.prototype.hasOwnProperty.call(props, varName) ? props[varName] : ''
+    })
   return retStr
 }
 

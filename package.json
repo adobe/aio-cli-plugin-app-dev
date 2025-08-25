@@ -1,7 +1,7 @@
 {
   "name": "@adobe/aio-cli-plugin-app-dev",
   "description": "run a localhost dev server to serve actions locally",
-  "version": "2.1.0",
+  "version": "2.1.2",
   "repository": "adobe/aio-cli-plugin-app-dev",
   "homepage": "https://github.com/adobe/aio-cli-plugin-app-dev",
   "bugs": "https://github.com/adobe/aio-cli-plugin-app-dev/issues",
@@ -27,7 +27,7 @@
     "inquirer": "^12",
     "livereload": "^0.9.3",
     "lodash.clonedeep": "^4.5.0",
-    "open": "^10.1.0",
+    "open": "^8.4.2",
     "ora": "^5",
     "upath": "^2.0.1"
   },

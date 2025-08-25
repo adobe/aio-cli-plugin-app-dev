@@ -169,7 +169,6 @@ describe('run', () => {
     }
 
     command.getAppExtConfigs.mockResolvedValueOnce({ myextension: appConfig })
-    const serverCleanup = () => console.log('server cleanup')
     mockRunDev.mockResolvedValue({
       frontEndUrl: 'https://localhost:9080',
       actionUrls: {
@@ -235,7 +234,6 @@ describe('run', () => {
   test('run, no flags, has frontend, no backend', async () => {
     command.argv = []
     const appConfig = {
-      manifest: { full: { packages: {} } },
       hooks: {
       },
       app: {

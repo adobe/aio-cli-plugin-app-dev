@@ -102,8 +102,13 @@ class Dev extends BaseCommand {
    * @param {object} config the config for the app
    */
   async verifyActionConfig (config) {
-    const actionConfig = config.manifest.full.packages
+    const actionConfig = config.manifest?.full?.packages
     const errors = []
+
+    // there might not be a runtime manifest, that's ok
+    if (!actionConfig) {
+      return
+    }
 
     // 1. all actions in sequences must exist
     Object.entries(actionConfig).forEach(([_, pkg]) => { // iterate through each package
@@ -140,7 +145,9 @@ class Dev extends BaseCommand {
 
   async runAppBuild (extensionConfig) {
     this.log('Building the app...')
-    await buildActions(extensionConfig, null /* filterActions[] */, false /* skipCheck */)
+    if (extensionConfig.app.hasBackend) {
+      await buildActions(extensionConfig, null /* filterActions[] */, false /* skipCheck */)
+    }
   }
 
   async runOneExtensionPoint (name, config, flags) {
@@ -205,12 +212,11 @@ class Dev extends BaseCommand {
     }
     if (hasBackend) {
       this.displayActionUrls(actionUrls)
+      const { watcherCleanup } = await createWatcher({ config, isLocal: true, inprocHook })
+      cleanup.add(() => watcherCleanup(), 'cleaning up action watcher...')
+      cleanup.wait()
     }
     this.log('press CTRL+C to terminate the dev environment')
-
-    const { watcherCleanup } = await createWatcher({ config, isLocal: true, inprocHook })
-    cleanup.add(() => watcherCleanup(), 'cleaning up action watcher...')
-    cleanup.wait()
   }
 
   async getOrGenerateCertificates ({ pubCertPath, privateKeyPath, devKeysDir, devKeysConfigKey, maxWaitTimeSeconds = 20 }) {

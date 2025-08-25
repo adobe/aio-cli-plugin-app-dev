@@ -348,7 +348,7 @@ describe('createActionParametersFromRequest', () => {
       justDollar: 'value is world',
       mustache: 'value is world',
       literal: 'value is literally "${mustache}" and "{mustache}"',
-      doesNotExist: 'value is ${doesNotExist}'
+      doesNotExist: 'value is '
     })
     delete process.env.mustache
   })
@@ -1449,23 +1449,22 @@ describe('runDev', () => {
     }
   })
 
-  test('has front end, has back end, bundler watch error', async () => {
-    const actionPath = fixturePath('actions/successNoReturnAction.js')
-    const config = createConfig({
-      hasFrontend: true,
-      hasBackend: true,
-      packageName: 'mypackage',
-      actions: {
-        myaction: {
-          function: actionPath
+  describe('has front end, has back end, bundler errors', () => {
+    test('bundler watch error', async () => {
+      const actionPath = fixturePath('actions/successNoReturnAction.js')
+      const config = createConfig({
+        hasFrontend: true,
+        hasBackend: true,
+        packageName: 'mypackage',
+        actions: {
+          myaction: {
+            function: actionPath
+          }
         }
-      }
-    })
-    const runOptions = createRunOptions({ cert: 'my-cert', key: 'my-key' })
-    const hookRunner = () => {}
+      })
+      const runOptions = createRunOptions({ cert: 'my-cert', key: 'my-key' })
+      const hookRunner = () => {}
 
-    // 1. error in bundle.watch
-    {
       const bundleEvent = createBundlerEvent()
       const bundleErr = { diagnostics: 'something went wrong' }
       mockLibWeb.bundle.mockResolvedValue({
@@ -1475,16 +1474,24 @@ describe('runDev', () => {
         }
       })
 
-      const { frontendUrl, actionUrls, serverCleanup } = await runDev(runOptions, config, hookRunner)
-      await serverCleanup()
+      await expect(runDev(runOptions, config, hookRunner)).rejects.toEqual(bundleErr)
+    })
 
-      expect(frontendUrl).toBeDefined()
-      expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
-      expect(mockLogger.error).toHaveBeenCalledWith(bundleErr.diagnostics)
-    }
+    test('bundler build error', async () => {
+      const actionPath = fixturePath('actions/successNoReturnAction.js')
+      const config = createConfig({
+        hasFrontend: true,
+        hasBackend: true,
+        packageName: 'mypackage',
+        actions: {
+          myaction: {
+            function: actionPath
+          }
+        }
+      })
+      const runOptions = createRunOptions({ cert: 'my-cert', key: 'my-key' })
+      const hookRunner = () => {}
 
-    // 2. error in bundle build
-    {
       const bundlerEventParams = { type: 'buildFailure', diagnostics: 'something went wrong' }
       const bundleEvent = createBundlerEvent(bundlerEventParams)
       mockLibWeb.bundle.mockResolvedValue({
@@ -1500,10 +1507,23 @@ describe('runDev', () => {
       expect(frontendUrl).toBeDefined()
       expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
       expect(mockLogger.error).toHaveBeenCalledWith(bundlerEventParams.diagnostics)
-    }
+    })
 
-    // 2. unknown buildEvent type
-    {
+    test('unknown build event type', async () => {
+      const actionPath = fixturePath('actions/successNoReturnAction.js')
+      const config = createConfig({
+        hasFrontend: true,
+        hasBackend: true,
+        packageName: 'mypackage',
+        actions: {
+          myaction: {
+            function: actionPath
+          }
+        }
+      })
+      const runOptions = createRunOptions({ cert: 'my-cert', key: 'my-key' })
+      const hookRunner = () => {}
+
       const bundlerEventParams = { type: 'unknown_event_type', diagnostics: 'something went wrong 2' }
       const bundleEvent = createBundlerEvent(bundlerEventParams)
       mockLibWeb.bundle.mockResolvedValue({
@@ -1518,7 +1538,7 @@ describe('runDev', () => {
 
       expect(frontendUrl).toBeDefined()
       expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
-    }
+    })
   })
 })
 
