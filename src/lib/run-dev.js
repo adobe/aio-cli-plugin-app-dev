@@ -27,6 +27,9 @@ const { getReasonPhrase } = require('http-status-codes')
 const utils = require('./app-helper')
 const { SERVER_HOST, SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX, BUNDLE_OPTIONS, CHANGED_ASSETS_PRINT_LIMIT } = require('./constants')
 const RAW_CONTENT_TYPES = ['application/octet-stream', 'multipart/form-data']
+const { detectAgents } = require('./agent-detector')
+const { AgentRunner } = require('./agent-runner')
+const { RestateManager } = require('./restate-manager')
 
 /* global Request, Response */
 
@@ -67,6 +70,25 @@ async function runDev (runOptions, config, _inprocHookRunner) {
 
   const serveLogger = coreLogger('serve', { level: process.env.LOG_LEVEL, provider: 'winston' })
   serveLogger.debug('config.manifest is', JSON.stringify(devConfig.manifest?.full?.packages, null, 2))
+
+  // Check if this is an agent-based application
+  const packages = devConfig.manifest?.full?.packages
+  serveLogger.debug('Checking for agents in packages:', JSON.stringify(packages, null, 2))
+  const { agents, regularActions, hasAgents } = detectAgents(packages)
+  serveLogger.debug(`Agent detection result: hasAgents=${hasAgents}, agents=${agents.length}, regularActions=${regularActions.length}`)
+  
+  if (hasAgents) {
+    serveLogger.info('🤖 Agent mode detected!')
+    serveLogger.info(`Found ${agents.length} agent(s) and ${regularActions.length} regular action(s)`)
+    
+    if (regularActions.length > 0) {
+      serveLogger.warn('⚠️  Mixing agents and regular actions is not yet supported')
+      serveLogger.warn('    Only agents will be started')
+    }
+    
+    // Run in agent mode
+    return await runAgentMode(runOptions, devConfig, agents, serveLogger)
+  }
 
   const actionConfig = devConfig.manifest?.full?.packages
   const hasFrontend = devConfig.app.hasFrontend
@@ -605,9 +627,121 @@ function createActionParametersFromRequest ({ req, contextItem, actionInputs = {
   return params
 }
 
+/**
+ * Run in agent mode - start agents as separate processes
+ * 
+ * @param {object} runOptions the run options
+ * @param {object} devConfig the dev config
+ * @param {Array} agents the detected agents
+ * @param {object} logger the logger instance
+ * @returns {Promise<object>} the return object with URLs
+ */
+async function runAgentMode(runOptions, devConfig, agents, logger) {
+  logger.info('Starting Agent Mode')
+  
+  // Initialize Restate manager
+  const restate = new RestateManager(logger)
+  let runner = null
+  
+  try {
+    // Start Restate server
+    await restate.start()
+    
+    // Build agents if needed
+    const distFolder = devConfig.actions.dist
+    if (distFolder) {
+      logger.info('Building agents...')
+      // The build should have already happened before runDev is called
+      // but we verify the dist folder exists
+      if (!fs.existsSync(distFolder)) {
+        throw new Error(`Distribution folder not found: ${distFolder}. Run 'aio app build' first.`)
+      }
+      logger.info('✓ Build artifacts found')
+    }
+    
+    // Start agent processes with debugging enabled (this is a dev environment)
+    runner = new AgentRunner(devConfig)
+    await runner.startAgents(agents, { debug: true })
+  
+    const agentInfo = runner.getAgentInfo()
+    
+    // Register agents with Restate automatically
+    await restate.registerAllAgents(agentInfo)
+    
+    // Display agent information at debug level
+    logger.debug('🚀 Agent Application Ready!')
+    
+    logger.debug('\nRestate Server:')
+    logger.debug(`  Ingress: http://localhost:${restate.ingressPort}`)
+    logger.debug(`  Admin: http://localhost:${restate.adminPort}`)
+    
+    logger.debug('\nAgents Running:')
+    agentInfo.forEach(({ name, port, debugPort, componentName }) => {
+      logger.debug(`  • ${name}`)
+      logger.debug(`    Component: ${componentName}`)
+      logger.debug(`    Port: ${port} (debug: ${debugPort})`)
+    })
+    
+    logger.debug('\nUsage:')
+    logger.debug('Call your agents through Restate:')
+    logger.debug('  curl -X POST http://localhost:8080/<agent-name>/<key>/<handler> \\')
+    logger.debug('    -H "Content-Type: application/json" \\')
+    logger.debug('    -d \'{"your": "data"}\'')
+    
+    logger.debug('\nExample:')
+    if (agentInfo.length > 0) {
+      const firstAgent = agentInfo[0]
+      logger.debug(`  curl -X POST http://localhost:8080/${firstAgent.componentName}/my-key/handler \\`)
+      logger.debug('    -H "Content-Type: application/json" \\')
+      logger.debug('    -d \'{"param": "value"}\'')
+    }
+    
+    logger.debug('\n🐛 Debugging:')
+    logger.debug('Debugger enabled on ports: ' + agentInfo.map(a => a.debugPort).join(', '))
+    logger.debug('• Use VS Code JavaScript Debug Terminal to auto-attach')
+    logger.debug('• Set breakpoints in your TypeScript files')
+    logger.debug('• Breakpoints will hit when agents are called!')
+    
+    logger.info('Press Ctrl+C to stop')
+    
+    // Build action URLs for Restate agents
+    const actionUrls = {}
+    agentInfo.forEach(({ name, componentName }) => {
+      actionUrls[name] = `http://localhost:${restate.ingressPort}/${componentName}`
+    })
+    
+    // Cleanup function that will be called by the command layer
+    const serverCleanup = async () => {
+      try {
+        logger.info('Cleaning up...')
+        if (runner) {
+          await runner.stopAll()
+        }
+        await restate.stop()
+      } catch (err) {
+        logger.error('Error during cleanup:', err.message)
+      }
+    }
+    
+    // Return immediately with expected structure
+    return {
+      frontendUrl: null,
+      actionUrls,
+      serverCleanup
+    }
+  } catch (error) {
+    logger.error('Error in agent mode:', error.message)
+    if (runner) {
+      await runner.stopAll()
+    }
+    throw error
+  }
+}
+
 module.exports = {
   defaultActionLoader,
   runDev,
+  runAgentMode,
   interpolate,
   serveWebAction,
   httpStatusResponse,
