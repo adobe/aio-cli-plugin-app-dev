@@ -29,7 +29,7 @@ const { createWatcher } = require('../../../lib/actions-watcher')
 
 const APP_EVENT_PRE_APP_DEV = 'pre-app-dev'
 const APP_EVENT_POST_APP_DEV = 'post-app-dev'
-const { PUB_CERT_PATH, PRIVATE_KEY_PATH, DEV_KEYS_DIR, DEV_KEYS_CONFIG_KEY, SERVER_DEFAULT_PORT, DEV_API_WEB_PREFIX } = require('../../../lib/constants')
+const { PUB_CERT_PATH, PRIVATE_KEY_PATH, DEV_KEYS_DIR, DEV_KEYS_CONFIG_KEY, SERVER_DEFAULT_PORT, DEV_API_WEB_PREFIX, DEV_API_STATE_PREFIX } = require('../../../lib/constants')
 const Cleanup = require('../../../lib/cleanup')
 
 class Dev extends BaseCommand {
@@ -82,16 +82,16 @@ class Dev extends BaseCommand {
     const printUrl = (url) => blueBoldLog(`  -> ${url}`)
 
     blueBoldLog('Your actions:')
-    const webActions = Object.values(actionUrls).filter(url => url.includes(DEV_API_WEB_PREFIX))
+    const webActions = Object.values(actionUrls).filter(url => url.includes(DEV_API_WEB_PREFIX) || url.includes(DEV_API_STATE_PREFIX))
     const nonWebActions = Object.keys(actionUrls).filter((key) => {
       const url = actionUrls[key]
-      return !url.includes(DEV_API_WEB_PREFIX)
+      return !url.includes(DEV_API_WEB_PREFIX) && !url.includes(DEV_API_STATE_PREFIX)
     })
 
     this.log('web actions:')
     webActions.forEach(printUrl)
     this.log('non-web actions:')
-    nonWebActions.forEach(printUrl)
+    nonWebActions.forEach(key => printUrl(actionUrls[key]))
   }
 
   /**
@@ -195,7 +195,7 @@ class Dev extends BaseCommand {
     const cleanup = new Cleanup()
 
     await this.runAppBuild(config)
-    const { frontendUrl, actionUrls, serverCleanup } = await runDev(runOptions, config, inprocHook)
+    const { frontendUrl, actionUrls, serverCleanup, agentContext } = await runDev(runOptions, config, inprocHook)
 
     cleanup.add(() => serverCleanup(), 'cleaning up runDev...')
 
@@ -211,7 +211,7 @@ class Dev extends BaseCommand {
     }
     if (hasBackend) {
       this.displayActionUrls(actionUrls)
-      const { watcherCleanup } = await createWatcher({ config, isLocal: true, inprocHook })
+      const { watcherCleanup } = await createWatcher({ config, isLocal: true, inprocHook, agentContext })
       cleanup.add(() => watcherCleanup(), 'cleaning up action watcher...')
       cleanup.wait()
     }

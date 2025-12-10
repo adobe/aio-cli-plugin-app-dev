@@ -51,7 +51,9 @@ class AgentRunner {
    * @param {number|null} debugPort - Debug port (if debugging enabled)
    */
   async startAgent(agent, port, debugPort = null) {
-    const functionPath = path.resolve(this.config.root, agent.function)
+    // buildActions uses webpack to bundle to: dist/application/actions/{package}/{action}-temp/index.js
+    const compiledPath = this.getCompiledPath(agent.package, agent.name)
+    const functionPath = path.resolve(this.config.root, compiledPath)
     const componentName = `${agent.package}-${agent.name}`
     
     const env = {
@@ -141,6 +143,41 @@ class AgentRunner {
   }
   
   /**
+   * Restart specific agents (stop and start them)
+   * @param {Array} agents - Array of agent objects to restart
+   */
+  async restartAgents(agents) {
+    console.log(`Restarting ${agents.length} agent(s)...`)
+    
+    for (const agent of agents) {
+      // Get current process info
+      const processInfo = this.processes.get(agent.name)
+      if (!processInfo) {
+        console.warn(`Agent ${agent.name} not found in running processes`)
+        continue
+      }
+      
+      const { port, debugPort } = processInfo
+      
+      // Stop the agent
+      console.log(`  Stopping ${agent.name}...`)
+      if (processInfo.process && !processInfo.process.killed) {
+        processInfo.process.kill('SIGTERM')
+      }
+      this.processes.delete(agent.name)
+      
+      // Wait a bit for process to fully stop
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Start it again with same port and debug port
+      console.log(`  Starting ${agent.name}...`)
+      await this.startAgent(agent, port, debugPort)
+    }
+    
+    console.log('✓ Agents restarted!')
+  }
+  
+  /**
    * Get information about running agents
    */
   getAgentInfo() {
@@ -171,6 +208,22 @@ class AgentRunner {
       })
     }
     return commands
+  }
+  
+  /**
+   * Get the compiled (webpack bundled) path for an agent.
+   * Uses the same logic as defaultActionLoader for regular actions:
+   *   {distFolder}/{packageName}/{actionName}-temp/index.js
+   * 
+   * @param {string} packageName - Package name from config
+   * @param {string} actionName - Action name from config
+   * @returns {string} - Compiled webpack bundle path
+   */
+  getCompiledPath(packageName, actionName) {
+    const distFolder = this.config.actions.dist || 'dist'
+
+    const actionFolder = path.join(distFolder, packageName, actionName)
+    return `${actionFolder}-temp/index.js`
   }
 }
 

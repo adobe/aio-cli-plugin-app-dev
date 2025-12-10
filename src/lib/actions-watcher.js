@@ -16,6 +16,39 @@ const { buildActions } = require('@adobe/aio-lib-runtime')
 const watchLogger = coreLogger('watcher', { level: process.env.LOG_LEVEL, provider: 'winston' })
 
 /**
+ * Handle agent reload after build completes
+ * @param {Array<string>} rebuiltActionNames - Names of actions that were rebuilt
+ * @param {object} agentContext - Agent context with agents, runner, restate
+ */
+async function handleAgentReload (rebuiltActionNames, agentContext) {
+  const { agents, runner, restate } = agentContext
+  
+  // Find which rebuilt actions are agents
+  const rebuiltAgents = agents.filter(agent => 
+    rebuiltActionNames.includes(agent.name)
+  )
+  
+  if (rebuiltAgents.length === 0) {
+    return // No agents were rebuilt
+  }
+  
+  watchLogger.info(`Reloading ${rebuiltAgents.length} agent(s)...`)
+  
+  try {
+    // Restart agent processes
+    await runner.restartAgents(rebuiltAgents)
+    
+    // Re-register with Restate
+    const agentInfo = runner.getAgentInfo()
+    await restate.registerAllAgents(agentInfo)
+    
+    watchLogger.info('✓ Agents reloaded successfully!')
+  } catch (err) {
+    watchLogger.error('Error reloading agents:', err.message)
+  }
+}
+
+/**
  * @typedef {object} WatchReturnObject
  * @property {object} watcher the watcher object
  * @property {Function} cleanup callback function to cleanup available resources
@@ -88,7 +121,7 @@ class Queue {
  * @returns {Function} the onchange handler for the watcher
  */
 function createChangeHandler (watcherOptions) {
-  const { config, watcher, actionNameFromPath = getActionNameFromPath } = watcherOptions
+  const { config, watcher, actionNameFromPath = getActionNameFromPath, agentContext } = watcherOptions
 
   let buildInProgress = false
   const queue = new Queue()
@@ -102,6 +135,11 @@ function createChangeHandler (watcherOptions) {
       } else {
         await buildActions(config, filterActions, false /* skipCheck */, false /* emptyDist */)
         watchLogger.info(`Build was successful for: ${filterActions.join(',')}`)
+        
+        // If agent mode, check if any rebuilt actions are agents and restart them
+        if (agentContext) {
+          await handleAgentReload(filterActions, agentContext)
+        }
       }
     } catch (err) {
       watchLogger.error('Error encountered while building actions. Stopping auto refresh.')

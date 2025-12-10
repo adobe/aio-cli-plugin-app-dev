@@ -18,7 +18,8 @@ const {
   DEV_KEYS_DIR = 'dist/dev-keys',
   DEV_KEYS_CONFIG_KEY = 'aio-dev.dev-keys',
   DEV_API_PREFIX = 'api/v1',
-  DEV_API_WEB_PREFIX = `${DEV_API_PREFIX}/web`
+  DEV_API_WEB_PREFIX = `${DEV_API_PREFIX}/web`,
+  DEV_API_STATE_PREFIX = `${DEV_API_PREFIX}/state`
 } = process.env
 
 const BUNDLE_OPTIONS = {
@@ -34,6 +35,7 @@ module.exports = {
   BUNDLER_DEFAULT_PORT: parseInt(BUNDLER_DEFAULT_PORT, 10), // parse any env override
   DEV_API_PREFIX,
   DEV_API_WEB_PREFIX,
+  DEV_API_STATE_PREFIX,
   DEV_KEYS_DIR,
   DEV_KEYS_CONFIG_KEY,
   DEFAULT_LAUNCH_PREFIX: 'https://experience.adobe.com/?devMode=true#/custom-apps/?localDevUrl=',

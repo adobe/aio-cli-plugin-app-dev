@@ -25,11 +25,12 @@ const coreLogger = require('@adobe/aio-lib-core-logging')
 const { getReasonPhrase } = require('http-status-codes')
 
 const utils = require('./app-helper')
-const { SERVER_HOST, SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX, BUNDLE_OPTIONS, CHANGED_ASSETS_PRINT_LIMIT } = require('./constants')
+const { SERVER_HOST, SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX, DEV_API_STATE_PREFIX, BUNDLE_OPTIONS, CHANGED_ASSETS_PRINT_LIMIT } = require('./constants')
 const RAW_CONTENT_TYPES = ['application/octet-stream', 'multipart/form-data']
 const { detectAgents } = require('./agent-detector')
 const { AgentRunner } = require('./agent-runner')
 const { RestateManager } = require('./restate-manager')
+const fetch = require('node-fetch')
 
 /* global Request, Response */
 
@@ -77,17 +78,14 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   const { agents, regularActions, hasAgents } = detectAgents(packages)
   serveLogger.debug(`Agent detection result: hasAgents=${hasAgents}, agents=${agents.length}, regularActions=${regularActions.length}`)
   
+  // Start agents in background if present
+  let agentContext = null
   if (hasAgents) {
     serveLogger.info('🤖 Agent mode detected!')
     serveLogger.info(`Found ${agents.length} agent(s) and ${regularActions.length} regular action(s)`)
     
-    if (regularActions.length > 0) {
-      serveLogger.warn('⚠️  Mixing agents and regular actions is not yet supported')
-      serveLogger.warn('    Only agents will be started')
-    }
-    
-    // Run in agent mode
-    return await runAgentMode(runOptions, devConfig, agents, serveLogger)
+    // Start agents in background
+    agentContext = await startAgentsInBackground(agents, devConfig, serveLogger)
   }
 
   const actionConfig = devConfig.manifest?.full?.packages
@@ -116,13 +114,31 @@ async function runDev (runOptions, config, _inprocHookRunner) {
     // note: 3rd arg, _isLocalDev is not used in RuntimeLib
     // there is no such thing as --local anymore
     const tempActionUrls = rtLib.utils.getActionUrls(devConfig, true /* isRemoteDev */, false /* isLocalDev */, false /* legacy */)
+    
+    // Filter out agents from regular action URLs (they'll get their own URLs below)
+    // Keys from rtLib include package prefix: "simple/calculatorAgent"
+    const agentKeys = new Set(agents.map(a => `${a.package}/${a.name}`))
+    
     actionUrls = Object.entries(tempActionUrls).reduce((acc, [key, value]) => {
+      // Skip agents - they'll be added with state proxy URLs
+      if (agentKeys.has(key)) {
+        return acc
+      }
       const url = new URL(value)
       url.port = serverPort
       url.hostname = SERVER_HOST
       acc[key] = url.toString()
       return acc
     }, {})
+  }
+  
+  // Add agent URLs with state proxy path
+  if (agentContext) {
+    const protocol = httpsSettings ? 'https' : 'http'
+    agents.forEach(agent => {
+      // Agent URL format: /api/v1/state/{package}/{action}/{key}/{handler}
+      actionUrls[agent.name] = `${protocol}://${SERVER_HOST}:${serverPort}/${DEV_API_STATE_PREFIX}/${agent.package}/${agent.name}/{key}/{handler}`
+    })
   }
 
   let serverOptions
@@ -202,6 +218,11 @@ async function runDev (runOptions, config, _inprocHookRunner) {
     app.use(express.static(devConfig.web.distDev))
   }
 
+  // Agent proxy route (if agents are running)
+  if (agentContext) {
+    app.all(`/${DEV_API_STATE_PREFIX}/*`, (req, res) => proxyToRestate(req, res, agentContext))
+  }
+
   // serveAction needs to clear cache for each request, so we get live changes
   app.all(`/${DEV_API_WEB_PREFIX}/*`, (req, res) => serveWebAction(req, res, actionConfig, distFolder))
   app.all(`/${DEV_API_PREFIX}/*`, (req, res) => serveWebAction(req, res, actionConfig, distFolder))
@@ -224,12 +245,29 @@ async function runDev (runOptions, config, _inprocHookRunner) {
     await server?.close()
     serveLogger.debug('removing parcel watcher ...')
     await subscription?.unsubscribe()
+    
+    // Stop agents if running
+    if (agentContext) {
+      serveLogger.debug('stopping agents ...')
+      try {
+        await agentContext.runner.stopAll()
+        await agentContext.restate.stop()
+      } catch (err) {
+        serveLogger.error('Error stopping agents:', err.message)
+      }
+    }
   }
 
   return {
     frontendUrl,
     actionUrls,
-    serverCleanup
+    serverCleanup,
+    // Pass agent context for hot reloading
+    agentContext: agentContext ? {
+      agents: agentContext.agents,
+      runner: agentContext.runner,
+      restate: agentContext.restate
+    } : undefined
   }
 }
 
@@ -628,16 +666,89 @@ function createActionParametersFromRequest ({ req, contextItem, actionInputs = {
 }
 
 /**
- * Run in agent mode - start agents as separate processes
+ * Proxy agent requests to Restate
+ * Translates /api/v1/state/{package}/{action}/{key}/{handler} to Restate format
  * 
- * @param {object} runOptions the run options
- * @param {object} devConfig the dev config
- * @param {Array} agents the detected agents
- * @param {object} logger the logger instance
- * @returns {Promise<object>} the return object with URLs
+ * @param {Request} req the request object
+ * @param {Response} res the response object
+ * @param {object} agentContext the agent context with agents, restate, runner
  */
-async function runAgentMode(runOptions, devConfig, agents, logger) {
-  logger.info('Starting Agent Mode')
+async function proxyToRestate(req, res, agentContext) {
+  const { agents, restate } = agentContext
+  const agentLogger = coreLogger('proxyToRestate', { level: process.env.LOG_LEVEL, provider: 'winston' })
+  
+  // Parse: /api/v1/state/package/action/key/handler
+  const url = req.params[0]  // 'package/action/key/handler'
+  const parts = url.split('/').filter(p => p) // Remove empty parts
+  
+  if (parts.length < 4) {
+    agentLogger.error(`Invalid agent URL: ${url}`)
+    return res.status(400).json({ 
+      error: 'Invalid agent URL. Expected: /api/v1/state/{package}/{action}/{key}/{handler}' 
+    })
+  }
+  
+  const [packageName, actionName, key, handler, ...restParts] = parts
+  
+  // Find agent to validate it exists
+  const agent = agents.find(a => 
+    a.package === packageName && a.name === actionName
+  )
+  
+  if (!agent) {
+    agentLogger.error(`Agent not found: ${packageName}/${actionName}`)
+    return res.status(404).json({ 
+      error: `Agent not found: ${packageName}/${actionName}` 
+    })
+  }
+  
+  // Build Restate URL: http://localhost:8080/{component}/{key}/{handler}
+  const componentName = `${packageName}-${actionName}`
+  const restPath = restParts.length > 0 ? '/' + restParts.join('/') : ''
+  const restateUrl = `http://localhost:${restate.ingressPort}/${componentName}/${key}/${handler}${restPath}`
+  
+  agentLogger.debug(`Proxying to Restate: ${restateUrl}`)
+  
+  try {
+    // Forward request to Restate
+    const response = await fetch(restateUrl, {
+      method: req.method,
+      headers: {
+        'Content-Type': req.get('Content-Type') || 'application/json',
+        ...req.headers
+      },
+      body: req.method !== 'GET' && req.method !== 'HEAD' ? JSON.stringify(req.body) : undefined
+    })
+    
+    // Forward response back to client
+    const responseBody = await response.text()
+    res.status(response.status)
+    
+    // Copy response headers
+    response.headers.forEach((value, key) => {
+      res.setHeader(key, value)
+    })
+    
+    res.send(responseBody)
+  } catch (error) {
+    agentLogger.error(`Error proxying to Restate: ${error.message}`)
+    res.status(500).json({ 
+      error: 'Error communicating with agent',
+      message: error.message 
+    })
+  }
+}
+
+/**
+ * Start agents in background (for mixed mode)
+ * 
+ * @param {Array} agents the detected agents
+ * @param {object} devConfig the dev config
+ * @param {object} logger the logger instance
+ * @returns {Promise<object>} agent context with runner, restate, and agentInfo
+ */
+async function startAgentsInBackground(agents, devConfig, logger) {
+  logger.info('🤖 Starting agents in background...')
   
   // Initialize Restate manager
   const restate = new RestateManager(logger)
@@ -647,19 +758,7 @@ async function runAgentMode(runOptions, devConfig, agents, logger) {
     // Start Restate server
     await restate.start()
     
-    // Build agents if needed
-    const distFolder = devConfig.actions.dist
-    if (distFolder) {
-      logger.info('Building agents...')
-      // The build should have already happened before runDev is called
-      // but we verify the dist folder exists
-      if (!fs.existsSync(distFolder)) {
-        throw new Error(`Distribution folder not found: ${distFolder}. Run 'aio app build' first.`)
-      }
-      logger.info('✓ Build artifacts found')
-    }
-    
-    // Start agent processes with debugging enabled (this is a dev environment)
+    // Start agent processes with debugging enabled
     runner = new AgentRunner(devConfig)
     await runner.startAgents(agents, { debug: true })
   
@@ -668,72 +767,21 @@ async function runAgentMode(runOptions, devConfig, agents, logger) {
     // Register agents with Restate automatically
     await restate.registerAllAgents(agentInfo)
     
-    // Display agent information at debug level
-    logger.debug('🚀 Agent Application Ready!')
+    logger.info(`✓ Started ${agents.length} agent(s)`)
+    logger.debug('Restate ingress:', `http://localhost:${restate.ingressPort}`)
     
-    logger.debug('\nRestate Server:')
-    logger.debug(`  Ingress: http://localhost:${restate.ingressPort}`)
-    logger.debug(`  Admin: http://localhost:${restate.adminPort}`)
-    
-    logger.debug('\nAgents Running:')
-    agentInfo.forEach(({ name, port, debugPort, componentName }) => {
-      logger.debug(`  • ${name}`)
-      logger.debug(`    Component: ${componentName}`)
-      logger.debug(`    Port: ${port} (debug: ${debugPort})`)
-    })
-    
-    logger.debug('\nUsage:')
-    logger.debug('Call your agents through Restate:')
-    logger.debug('  curl -X POST http://localhost:8080/<agent-name>/<key>/<handler> \\')
-    logger.debug('    -H "Content-Type: application/json" \\')
-    logger.debug('    -d \'{"your": "data"}\'')
-    
-    logger.debug('\nExample:')
-    if (agentInfo.length > 0) {
-      const firstAgent = agentInfo[0]
-      logger.debug(`  curl -X POST http://localhost:8080/${firstAgent.componentName}/my-key/handler \\`)
-      logger.debug('    -H "Content-Type: application/json" \\')
-      logger.debug('    -d \'{"param": "value"}\'')
-    }
-    
-    logger.debug('\n🐛 Debugging:')
-    logger.debug('Debugger enabled on ports: ' + agentInfo.map(a => a.debugPort).join(', '))
-    logger.debug('• Use VS Code JavaScript Debug Terminal to auto-attach')
-    logger.debug('• Set breakpoints in your TypeScript files')
-    logger.debug('• Breakpoints will hit when agents are called!')
-    
-    logger.info('Press Ctrl+C to stop')
-    
-    // Build action URLs for Restate agents
-    const actionUrls = {}
-    agentInfo.forEach(({ name, componentName }) => {
-      actionUrls[name] = `http://localhost:${restate.ingressPort}/${componentName}`
-    })
-    
-    // Cleanup function that will be called by the command layer
-    const serverCleanup = async () => {
-      try {
-        logger.info('Cleaning up...')
-        if (runner) {
-          await runner.stopAll()
-        }
-        await restate.stop()
-      } catch (err) {
-        logger.error('Error during cleanup:', err.message)
-      }
-    }
-    
-    // Return immediately with expected structure
     return {
-      frontendUrl: null,
-      actionUrls,
-      serverCleanup
+      restate,
+      runner,
+      agentInfo,
+      agents
     }
   } catch (error) {
-    logger.error('Error in agent mode:', error.message)
+    logger.error('Error starting agents:', error.message)
     if (runner) {
       await runner.stopAll()
     }
+    await restate.stop()
     throw error
   }
 }
@@ -741,7 +789,6 @@ async function runAgentMode(runOptions, devConfig, agents, logger) {
 module.exports = {
   defaultActionLoader,
   runDev,
-  runAgentMode,
   interpolate,
   serveWebAction,
   httpStatusResponse,
