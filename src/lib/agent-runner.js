@@ -59,8 +59,7 @@ class AgentRunner {
     const env = {
       ...process.env,
       PORT: port.toString(),
-      RESTATE_COMPONENT_NAME: componentName,
-      ...agent.inputs
+      RESTATE_COMPONENT_NAME: componentName
     }
     
     // Build node arguments

@@ -195,7 +195,7 @@ class Dev extends BaseCommand {
     const cleanup = new Cleanup()
 
     await this.runAppBuild(config)
-    const { frontendUrl, actionUrls, serverCleanup, agentContext } = await runDev(runOptions, config, inprocHook)
+    const { frontendUrl, actionUrls, serverCleanup, agentContext, restateUiUrl } = await runDev(runOptions, config, inprocHook)
 
     cleanup.add(() => serverCleanup(), 'cleaning up runDev...')
 
@@ -214,6 +214,9 @@ class Dev extends BaseCommand {
       const { watcherCleanup } = await createWatcher({ config, isLocal: true, inprocHook, agentContext })
       cleanup.add(() => watcherCleanup(), 'cleaning up action watcher...')
       cleanup.wait()
+    }
+    if (restateUiUrl) {
+      this.log(chalk.blue(chalk.bold(`Restate UI:\n  -> ${restateUiUrl}`)))
     }
     this.log('press CTRL+C to terminate the dev environment')
   }

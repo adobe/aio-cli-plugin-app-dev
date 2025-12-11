@@ -12,7 +12,7 @@ governing permissions and limitations under the License.
 
 /**
  * Detects if actions are agents based on runtime identifier
- * Agents are identified by runtime containing '-agent' (e.g., nodejs:22-agent)
+ * Agents are identified by runtime 'nodejs:22'
  * 
  * @param {object} packages - The packages object from manifest
  * @returns {object} { agents: [], regularActions: [], hasAgents: boolean }
@@ -35,7 +35,7 @@ function detectAgents(packages) {
         package: packageName
       }
       
-      if (action.runtime && action.runtime.includes('-agent')) {
+      if (action.runtime && action.runtime === 'nodejs:22') {
         agents.push(actionInfo)
       } else {
         regularActions.push(actionInfo)

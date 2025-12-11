@@ -267,7 +267,9 @@ async function runDev (runOptions, config, _inprocHookRunner) {
       agents: agentContext.agents,
       runner: agentContext.runner,
       restate: agentContext.restate
-    } : undefined
+    } : undefined,
+    // Restate UI URL if agents are running
+    restateUiUrl: agentContext ? `http://localhost:${agentContext.restate.adminPort}/ui` : undefined
   }
 }
 
