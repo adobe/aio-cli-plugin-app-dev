@@ -53,8 +53,14 @@ class AgentRunner {
   async startAgent(agent, port, debugPort = null) {
     // buildActions uses webpack to bundle to: dist/application/actions/{package}/{action}-temp/index.js
     const compiledPath = this.getCompiledPath(agent.package, agent.name)
-    const functionPath = path.resolve(this.config.root, compiledPath)
-    const componentName = `${agent.package}-${agent.name}`
+    const agentBundlePath = path.resolve(this.config.root, compiledPath)
+    
+    // Path to universal agent server shim
+    const shimPath = path.join(__dirname, 'agent-server.js')
+    
+    // Include namespace in component name to match production format: namespace-package-action
+    const namespace = this.config.ow?.namespace || process.env.AIO_RUNTIME_NAMESPACE || 'local'
+    const componentName = `${namespace}-${agent.package}-${agent.name}`
     
     const env = {
       ...process.env,
@@ -67,7 +73,8 @@ class AgentRunner {
     if (debugPort) {
       nodeArgs.push(`--inspect=${debugPort}`)
     }
-    nodeArgs.push(functionPath)
+    // Run the shim and pass the agent bundle path as an argument
+    nodeArgs.push(shimPath, agentBundlePath)
     
     const proc = spawn('node', nodeArgs, {
       env,

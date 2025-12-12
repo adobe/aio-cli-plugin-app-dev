@@ -135,9 +135,11 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   // Add agent URLs with state proxy path
   if (agentContext) {
     const protocol = httpsSettings ? 'https' : 'http'
+    const namespace = devConfig.ow?.namespace || process.env.AIO_RUNTIME_NAMESPACE || 'local'
     agents.forEach(agent => {
-      // Agent URL format: /api/v1/state/{package}/{action}/{key}/{handler}
-      actionUrls[agent.name] = `${protocol}://${SERVER_HOST}:${serverPort}/${DEV_API_STATE_PREFIX}/${agent.package}/${agent.name}/{key}/{handler}`
+      // Agent URL format: /api/v1/state/{namespace}/{package}/{action}/{key}/{handler}
+      // This matches production URL format
+      actionUrls[agent.name] = `${protocol}://${SERVER_HOST}:${serverPort}/${DEV_API_STATE_PREFIX}/${namespace}/${agent.package}/${agent.name}/{key}/{handler}`
     })
   }
 
@@ -679,18 +681,18 @@ async function proxyToRestate(req, res, agentContext) {
   const { agents, restate } = agentContext
   const agentLogger = coreLogger('proxyToRestate', { level: process.env.LOG_LEVEL, provider: 'winston' })
   
-  // Parse: /api/v1/state/package/action/key/handler
-  const url = req.params[0]  // 'package/action/key/handler'
+  // Parse: /api/v1/state/namespace/package/action/key/handler
+  const url = req.params[0]  // 'namespace/package/action/key/handler'
   const parts = url.split('/').filter(p => p) // Remove empty parts
   
-  if (parts.length < 4) {
+  if (parts.length < 5) {
     agentLogger.error(`Invalid agent URL: ${url}`)
     return res.status(400).json({ 
-      error: 'Invalid agent URL. Expected: /api/v1/state/{package}/{action}/{key}/{handler}' 
+      error: 'Invalid agent URL. Expected: /api/v1/state/{namespace}/{package}/{action}/{key}/{handler}' 
     })
   }
   
-  const [packageName, actionName, key, handler, ...restParts] = parts
+  const [namespace, packageName, actionName, key, handler, ...restParts] = parts
   
   // Find agent to validate it exists
   const agent = agents.find(a => 
@@ -705,21 +707,32 @@ async function proxyToRestate(req, res, agentContext) {
   }
   
   // Build Restate URL: http://localhost:8080/{component}/{key}/{handler}
-  const componentName = `${packageName}-${actionName}`
+  // Include namespace in component name to match production format: namespace-package-action
+  // namespace is already extracted from URL parts above
+  const componentName = `${namespace}-${packageName}-${actionName}`
   const restPath = restParts.length > 0 ? '/' + restParts.join('/') : ''
   const restateUrl = `http://localhost:${restate.ingressPort}/${componentName}/${key}/${handler}${restPath}`
   
   agentLogger.debug(`Proxying to Restate: ${restateUrl}`)
   
   try {
-    // Forward request to Restate
+    // Merge agent inputs from app.config.yaml with request body
+    // Inputs have lower priority - request body can override them
+    const mergedInput = {
+      ...(agent.inputs || {}),  // Default inputs from app.config.yaml
+      ...(req.body || {})       // Request body overrides defaults
+    }
+    
+    agentLogger.debug(`Merged inputs:`, mergedInput)
+    
+    // Forward request to Restate with merged inputs
     const response = await fetch(restateUrl, {
       method: req.method,
       headers: {
         'Content-Type': req.get('Content-Type') || 'application/json',
         ...req.headers
       },
-      body: req.method !== 'GET' && req.method !== 'HEAD' ? JSON.stringify(req.body) : undefined
+      body: req.method !== 'GET' && req.method !== 'HEAD' ? JSON.stringify(mergedInput) : undefined
     })
     
     // Forward response back to client
