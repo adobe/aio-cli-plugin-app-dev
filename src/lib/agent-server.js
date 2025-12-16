@@ -14,22 +14,20 @@ governing permissions and limitations under the License.
 /**
  * Universal Restate Service Server Shim
  * 
- * This script loads an agent or orchestrator bundle and serves it with Restate.
- * Service files only need to export their agent/orchestrator object - they don't need to call restate.serve()
+ * This script loads user's compiled agent code and serves it with the CLI's Restate SDK.
+ * This matches production invoker behavior where user code is loaded and served
+ * with the runtime's SDK instance.
  * 
- * Supports: agents (*Agent) and orchestrators (*Orchestrator)
+ * Service files should export { object, name } or { workflow, name } or { service, name }
+ * The handlers are then recreated using the CLI's SDK.
  * 
  * Usage: node agent-server.js <path-to-service-bundle>
  */
 
 const path = require('path')
 
-// CRITICAL: Load Restate SDK from the PROJECT's node_modules, not the CLI plugin's
-// The bundle was built against the project's SDK instance, so we must use the same instance
-const projectRoot = process.cwd()
-const restate = require(require.resolve('@restatedev/restate-sdk', {
-  paths: [projectRoot]
-}))
+
+const restate = require('@restatedev/restate-sdk')
 
 // Get service path from command line args
 const servicePath = process.argv[2]
@@ -42,25 +40,47 @@ if (!servicePath) {
 const resolvedServicePath = path.resolve(servicePath)
 
 // Import the service module
-let serviceModule
+let loadedAgent
 try {
-  serviceModule = require(resolvedServicePath)
+  // Clear require cache to support hot reload
+  delete require.cache[require.resolve(resolvedServicePath)]
+  loadedAgent = require(resolvedServicePath)
+  
+  // Support export default syntax
+  if (loadedAgent.default && typeof loadedAgent.default === 'object') {
+    loadedAgent = loadedAgent.default
+  }
 } catch (error) {
   console.error(`Failed to load service from ${resolvedServicePath}:`, error.message)
+  console.error(error.stack)
   process.exit(1)
 }
 
-// Find the service object from the module exports
-const service = findServiceExport(serviceModule)
+// Recreate the agent using the runtime's SDK instance
+// This is necessary because the loaded agent was created with a different SDK instance
+let service
+let handlers
 
-if (!service) {
-  console.error(`Error: No valid Restate service found in ${resolvedServicePath}`)
-  console.error('Service files must export a named export called "agent" or "orchestrator".')
-  console.error('Examples:')
-  console.error('  - export const agent = restate.object({...})')
-  console.error('  - export const orchestrator = restate.object({...})')
-  console.error('  - export default restate.object({...})')
-  process.exit(1)
+if (loadedAgent.hasOwnProperty('object')) {
+  handlers = loadedAgent.object
+  service = restate.object({
+    name: loadedAgent.name,
+    handlers: handlers
+  })
+} else if (loadedAgent.hasOwnProperty('workflow')) {
+  handlers = loadedAgent.workflow
+  service = restate.workflow({
+    name: loadedAgent.name,
+    handlers: handlers
+  })
+} else if (loadedAgent.hasOwnProperty('service')) {
+  handlers = loadedAgent.service
+  service = restate.service({
+    name: loadedAgent.name,
+    handlers: handlers
+  })
+} else {
+  throw new Error(`Invalid agent type: ${loadedAgent}`)
 }
 
 // Get port from environment (set by AgentRunner)
@@ -72,41 +92,8 @@ try {
     services: [service],
     port: PORT
   })
-  console.log(`✓ Restate service serving on port ${PORT}`)
 } catch (error) {
   console.error(`Failed to serve service on port ${PORT}:`, error.message)
+  console.error(error.stack)
   process.exit(1)
 }
-
-/**
- * Attempts to find a valid Restate service export from the module
- * Looks for named exports: 'agent' or 'orchestrator', or default export
- * No fallbacks - export must be explicitly named
- * 
- * @param {object} module - The loaded module
- * @returns {object|null} - The service object or null if not found
- */
-function findServiceExport (module) {
-  if (!module || typeof module !== 'object') {
-    return null
-  }
-
-  // Look for named export 'agent'
-  if (module.agent && typeof module.agent === 'object') {
-    return module.agent
-  }
-
-  // Look for named export 'orchestrator'
-  if (module.orchestrator && typeof module.orchestrator === 'object') {
-    return module.orchestrator
-  }
-
-  // Check for default export
-  if (module.default && typeof module.default === 'object') {
-    return module.default
-  }
-
-  // No valid export found - strict mode, no fallbacks
-  return null
-}
-

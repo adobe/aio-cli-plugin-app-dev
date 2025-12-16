@@ -78,7 +78,7 @@ class RestateManager {
    * Start the Restate server
    */
   async start() {
-    this.logger.info('Checking Restate server...')
+    this.logger.debug('Checking Restate server...')
     
     // Check if Docker is available
     const hasDocker = await this.checkDocker()
@@ -91,22 +91,21 @@ class RestateManager {
     
     // Check if already running
     if (await this.isRunning()) {
-      this.logger.info('✓ Restate server already running')
+      this.logger.debug('✓ Restate server already running')
       return
     }
     
     // Check if container exists but is stopped
     if (await this.containerExists()) {
-      this.logger.info('Starting existing Restate container...')
+      this.logger.debug('Starting existing Restate container...')
       await this.startExistingContainer()
     } else {
-      this.logger.info('Starting new Restate container...')
+      this.logger.debug('Starting new Restate container...')
       await this.startNewContainer()
     }
     
     // Wait for Restate to be ready
     await this.waitForReady()
-    this.logger.info('✓ Restate server ready')
   }
   
   /**
@@ -204,13 +203,9 @@ class RestateManager {
    * Register all agents with Restate
    */
   async registerAllAgents(agentInfos) {
-    this.logger.info('\nRegistering agents with Restate...')
-    
     for (const { name, port } of agentInfos) {
       await this.registerAgent(name, port)
     }
-    
-    this.logger.info('✓ All agents registered!')
   }
   
   /**

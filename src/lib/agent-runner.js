@@ -31,7 +31,6 @@ class AgentRunner {
    */
   async startAgents(agents, options = {}) {
     const debugMode = options.debug || false
-    console.log(`Starting ${agents.length} agent${agents.length > 1 ? 's' : ''}${debugMode ? ' with debugger' : ''}...`)
     
     for (let i = 0; i < agents.length; i++) {
       const agent = agents[i]
@@ -40,8 +39,6 @@ class AgentRunner {
       
       await this.startAgent(agent, port, debugPort)
     }
-    
-    console.log('✓ All agents started!')
   }
   
   /**
@@ -82,21 +79,32 @@ class AgentRunner {
       stdio: ['ignore', 'pipe', 'pipe'] // Pipe stdout and stderr so we can prefix them
     })
     
-    // Prefix stdout with agent name
+    // Filter and suppress noisy logs
+    const shouldSuppressLog = (line) => {
+      // Suppress debugger and specific Restate SDK startup messages
+      return line.includes('Debugger') ||
+             line.includes('Loaded module successfully') ||
+             line.includes('Starting Restate service') ||
+             line.includes('✓ Restate service listening') ||
+             line.includes('Restate SDK started listening') ||
+             line.includes('Accepting requests without validating request signatures')
+    }
+    
+    // Prefix stdout with agent name (filtered)
     proc.stdout.on('data', (data) => {
       const lines = data.toString().trim().split('\n')
       lines.forEach(line => {
-        if (line) {
+        if (line && !shouldSuppressLog(line)) {
           console.log(`[${agent.name}] ${line}`)
         }
       })
     })
     
-    // Prefix stderr with agent name
+    // Prefix stderr with agent name (filtered)
     proc.stderr.on('data', (data) => {
       const lines = data.toString().trim().split('\n')
       lines.forEach(line => {
-        if (line) {
+        if (line && !shouldSuppressLog(line)) {
           console.error(`[${agent.name}] ${line}`)
         }
       })

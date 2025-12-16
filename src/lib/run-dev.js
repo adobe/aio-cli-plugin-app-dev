@@ -10,6 +10,7 @@ OF ANY KIND, either express or implied. See the License for the specific languag
 governing permissions and limitations under the License.
 */
 
+const ora = require('ora')
 const cloneDeep = require('lodash.clonedeep')
 const express = require('express')
 const fs = require('fs-extra')
@@ -81,10 +82,6 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   // Start agents in background if present
   let agentContext = null
   if (hasAgents) {
-    serveLogger.info('🤖 Agent mode detected!')
-    serveLogger.info(`Found ${agents.length} agent(s) and ${regularActions.length} regular action(s)`)
-    
-    // Start agents in background
     agentContext = await startAgentsInBackground(agents, devConfig, serveLogger)
   }
 
@@ -234,7 +231,7 @@ async function runDev (runOptions, config, _inprocHookRunner) {
     if (serverPort !== serverPortToUse) {
       serveLogger.info(`Could not use server port ${serverPortToUse}, using port ${serverPort} instead`)
     }
-    serveLogger.info(`server running on port : ${serverPort}`)
+    serveLogger.debug(`server running on port : ${serverPort}`)
   })
 
   let frontendUrl
@@ -763,26 +760,38 @@ async function proxyToRestate(req, res, agentContext) {
  * @returns {Promise<object>} agent context with runner, restate, and agentInfo
  */
 async function startAgentsInBackground(agents, devConfig, logger) {
-  logger.info('🤖 Starting agents in background...')
   
   // Initialize Restate manager
   const restate = new RestateManager(logger)
   let runner = null
   
   try {
-    // Start Restate server
+    // Start Restate server with spinner
+    const restateSpinner = ora('Starting Restate server').start()
     await restate.start()
+    restateSpinner.succeed('Restate server started')
     
     // Start agent processes with debugging enabled
     runner = new AgentRunner(devConfig)
-    await runner.startAgents(agents, { debug: true })
+    
+    // Load each agent with a spinner
+    for (const agent of agents) {
+      const agentSpinner = ora(`Loading ${agent.name}`).start()
+      await runner.startAgent(
+        agent,
+        runner.basePort + agents.indexOf(agent),
+        true ? 9229 + agents.indexOf(agent) : null // debug mode
+      )
+      agentSpinner.succeed(`Loaded ${agent.name}`)
+    }
   
     const agentInfo = runner.getAgentInfo()
     
-    // Register agents with Restate automatically
+    // Register agents with Restate with spinner
+    const registerSpinner = ora('Registering agents with Restate').start()
     await restate.registerAllAgents(agentInfo)
+    registerSpinner.succeed('All agents registered with Restate')
     
-    logger.info(`✓ Started ${agents.length} agent(s)`)
     logger.debug('Restate ingress:', `http://localhost:${restate.ingressPort}`)
     
     return {
