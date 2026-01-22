@@ -40,5 +40,6 @@ module.exports = {
   STAGE_LAUNCH_PREFIX: 'https://experience-stage.adobe.com/?devMode=true#/custom-apps/?localDevUrl=',
   PRIVATE_KEY_PATH: `${DEV_KEYS_DIR}/private.key`,
   PUB_CERT_PATH: `${DEV_KEYS_DIR}/cert-pub.crt`,
-  BUNDLE_OPTIONS
+  BUNDLE_OPTIONS,
+  IMS_OAUTH_S2S_ENV_KEY: 'IMS_OAUTH_S2S'
 }
