@@ -23,7 +23,8 @@ const {
   STAGE_LAUNCH_PREFIX,
   PRIVATE_KEY_PATH,
   PUB_CERT_PATH,
-  BUNDLE_OPTIONS
+  BUNDLE_OPTIONS,
+  IMS_OAUTH_S2S_ENV_KEY
 } = require(CONSTANTS_PATH)
 
 test('exports', () => {
@@ -39,6 +40,7 @@ test('exports', () => {
   expect(PRIVATE_KEY_PATH).toBeDefined()
   expect(PUB_CERT_PATH).toBeDefined()
   expect(BUNDLE_OPTIONS).toBeDefined()
+  expect(IMS_OAUTH_S2S_ENV_KEY).toBeDefined()
 })
 
 describe('override via env vars', () => {
