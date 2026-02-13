@@ -1259,9 +1259,9 @@ describe('runDev', () => {
     expect(Object.keys(actionUrls).length).toEqual(0)
   })
 
-  test('parses IMS_OAUTH_S2S environment variable', async () => {
-    const imsAuthData = { access_token: 'test-token', org_id: 'test-org' }
-    process.env.IMS_OAUTH_S2S = JSON.stringify(imsAuthData)
+  test('calls loadIMSCredentialsFromEnv for include-ims-credentials support', async () => {
+    const rtLib = jest.requireActual('@adobe/aio-lib-runtime')
+    const loadIMSCredentialsFromEnvSpy = jest.spyOn(rtLib.utils, 'loadIMSCredentialsFromEnv')
 
     const actionPath = fixturePath('actions/successNoReturnAction.js')
     const config = createConfig({
@@ -1279,31 +1279,10 @@ describe('runDev', () => {
     const { actionUrls, serverCleanup } = await runDev(runOptions, config, hookRunner)
 
     await serverCleanup()
-    // Verify runDev completes successfully when IMS_OAUTH_S2S env var is set with valid JSON
+
+    expect(loadIMSCredentialsFromEnvSpy).toHaveBeenCalled()
     expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
-  })
-
-  test('handles invalid IMS_OAUTH_S2S JSON gracefully', async () => {
-    process.env.IMS_OAUTH_S2S = 'not-valid-json'
-
-    const actionPath = fixturePath('actions/successNoReturnAction.js')
-    const config = createConfig({
-      hasFrontend: false,
-      hasBackend: true,
-      packageName: 'mypackage',
-      actions: {
-        myaction: {
-          function: actionPath
-        }
-      }
-    })
-    const runOptions = createRunOptions({ cert: 'my-cert', key: 'my-key' })
-    const hookRunner = () => {}
-    const { actionUrls, serverCleanup } = await runDev(runOptions, config, hookRunner)
-
-    await serverCleanup()
-    // Verify runDev completes successfully even when IMS_OAUTH_S2S contains invalid JSON
-    expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
+    loadIMSCredentialsFromEnvSpy.mockRestore()
   })
 
   test('no front end, has back end', async () => {
@@ -1848,8 +1827,8 @@ describe('invokeAction', () => {
       const response = await invokeAction({ actionRequestContext, logger: mockLogger })
 
       expect(getIncludeIMSCredentialsAnnotationInputsSpy).toHaveBeenCalledWith(action, expect.anything())
-      expect(actionParams.__ow_ims_access_token).toBeUndefined()
-      expect(actionParams.__ow_ims_org_id).toBeUndefined()
+      expect(actionParams.__ims_oauth_s2s).toBeUndefined()
+      expect(actionParams.__ims_env).toBeUndefined()
       expect(actionParams.existingParam).toEqual('value')
       expect(response.statusCode).toEqual(200)
     })

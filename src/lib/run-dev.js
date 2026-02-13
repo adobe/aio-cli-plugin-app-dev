@@ -25,7 +25,7 @@ const coreLogger = require('@adobe/aio-lib-core-logging')
 const { getReasonPhrase } = require('http-status-codes')
 
 const utils = require('./app-helper')
-const { SERVER_HOST, SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX, BUNDLE_OPTIONS, CHANGED_ASSETS_PRINT_LIMIT, IMS_OAUTH_S2S_ENV_KEY } = require('./constants')
+const { SERVER_HOST, SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX, BUNDLE_OPTIONS, CHANGED_ASSETS_PRINT_LIMIT } = require('./constants')
 const RAW_CONTENT_TYPES = ['application/octet-stream', 'multipart/form-data']
 
 // for the include-ims-credentials annotation
@@ -89,10 +89,8 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   // ex. console.log('AIO_DEV ', process.env.AIO_DEV ? 'dev' : 'prod')
   process.env.AIO_DEV = 'true'
 
-  // for the include-ims-credentials annotation
-  try {
-    imsAuthObject = JSON.parse(process.env[IMS_OAUTH_S2S_ENV_KEY])
-  } catch (e) {}
+  // include ims credentials inputs __ims_oauth_s2s and __ims_env
+  imsAuthObject = rtLib.utils.loadIMSCredentialsFromEnv()
 
   const serverPortToUse = parseInt(process.env.PORT) || SERVER_DEFAULT_PORT
   const serverPort = await getPort({ port: serverPortToUse })
