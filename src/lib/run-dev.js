@@ -28,6 +28,9 @@ const utils = require('./app-helper')
 const { SERVER_HOST, SERVER_DEFAULT_PORT, BUNDLER_DEFAULT_PORT, DEV_API_PREFIX, DEV_API_WEB_PREFIX, BUNDLE_OPTIONS, CHANGED_ASSETS_PRINT_LIMIT } = require('./constants')
 const RAW_CONTENT_TYPES = ['application/octet-stream', 'multipart/form-data']
 
+// for the include-ims-credentials annotation
+let imsAuthObject = null
+
 /* global Request, Response */
 
 /**
@@ -85,6 +88,9 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   // this can be read as truthy, it will not exist in Runtime
   // ex. console.log('AIO_DEV ', process.env.AIO_DEV ? 'dev' : 'prod')
   process.env.AIO_DEV = 'true'
+
+  // include ims credentials inputs __ims_oauth_s2s and __ims_env
+  imsAuthObject = rtLib.utils.loadIMSCredentialsFromEnv()
 
   const serverPortToUse = parseInt(process.env.PORT) || SERVER_DEFAULT_PORT
   const serverPort = await getPort({ port: serverPortToUse })
@@ -344,6 +350,13 @@ async function invokeAction ({ actionRequestContext, logger }) {
         }
       }
     }
+  }
+
+  // process the include-ims-credentials annotation
+  const newInputs = rtLib.utils.getIncludeIMSCredentialsAnnotationInputs(action, imsAuthObject)
+  if (newInputs) {
+    Object.entries(newInputs).forEach(([k, v]) => { params[k] = v })
+    logger.debug(`Added IMS credentials to action params for action '${actionName}'.`)
   }
 
   // if we run an action, we will restore the process.env after the call

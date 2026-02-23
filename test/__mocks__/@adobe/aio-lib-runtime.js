@@ -86,7 +86,8 @@ const mockRtLibInstance = {
 
 const mockRtUtils = {
   getActionUrls: jest.fn(),
-  checkOpenWhiskCredentials: jest.fn()
+  checkOpenWhiskCredentials: jest.fn(),
+  getIncludeIMSCredentialsAnnotationInputs: jest.fn()
 }
 
 const init = jest.fn().mockReturnValue(mockRtLibInstance)

@@ -1231,6 +1231,12 @@ describe('invokeSequence', () => {
 })
 
 describe('runDev', () => {
+  const originalEnv = process.env
+
+  afterEach(() => {
+    process.env = { ...originalEnv }
+  })
+
   test('no front end, no back end', async () => {
     const actionPath = fixturePath('actions/successNoReturnAction.js')
     const config = createConfig({
@@ -1251,6 +1257,32 @@ describe('runDev', () => {
 
     expect(frontendUrl).not.toBeDefined()
     expect(Object.keys(actionUrls).length).toEqual(0)
+  })
+
+  test('calls loadIMSCredentialsFromEnv for include-ims-credentials support', async () => {
+    const rtLib = jest.requireActual('@adobe/aio-lib-runtime')
+    const loadIMSCredentialsFromEnvSpy = jest.spyOn(rtLib.utils, 'loadIMSCredentialsFromEnv')
+
+    const actionPath = fixturePath('actions/successNoReturnAction.js')
+    const config = createConfig({
+      hasFrontend: false,
+      hasBackend: true,
+      packageName: 'mypackage',
+      actions: {
+        myaction: {
+          function: actionPath
+        }
+      }
+    })
+    const runOptions = createRunOptions({ cert: 'my-cert', key: 'my-key' })
+    const hookRunner = () => {}
+    const { actionUrls, serverCleanup } = await runDev(runOptions, config, hookRunner)
+
+    await serverCleanup()
+
+    expect(loadIMSCredentialsFromEnvSpy).toHaveBeenCalled()
+    expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
+    loadIMSCredentialsFromEnvSpy.mockRestore()
   })
 
   test('no front end, has back end', async () => {
@@ -1704,6 +1736,101 @@ describe('invokeAction', () => {
         error: expect.stringMatching('Response is not valid \'message/http\'.')
       },
       statusCode: 400
+    })
+  })
+
+  describe('include-ims-credentials annotation', () => {
+    const rtLib = jest.requireActual('@adobe/aio-lib-runtime')
+    let getIncludeIMSCredentialsAnnotationInputsSpy
+
+    beforeEach(() => {
+      getIncludeIMSCredentialsAnnotationInputsSpy = jest.spyOn(rtLib.utils, 'getIncludeIMSCredentialsAnnotationInputs')
+    })
+
+    afterEach(() => {
+      getIncludeIMSCredentialsAnnotationInputsSpy.mockRestore()
+    })
+
+    test('adds IMS credentials to params when getIncludeIMSCredentialsAnnotationInputs returns inputs', async () => {
+      const packageName = 'foo'
+      const actionPath = fixturePath('actions/successReturnAction.js')
+      const actionLoader = createActionLoader(actionPath)
+
+      const action = {
+        function: actionPath,
+        annotations: {
+          'include-ims-credentials': true
+        }
+      }
+      const actionParams = { existingParam: 'value' }
+      const actionName = 'a'
+      const actionConfig = {
+        [packageName]: {
+          actions: {
+            [actionName]: action
+          }
+        }
+      }
+
+      // Mock the function to return IMS credentials
+      const mockImsInputs = {
+        __ims_oauth_s2s: { client_id: 'mock-access-token', org_id: 'mock-org-id' },
+        __ims_env: 'stage'
+      }
+      getIncludeIMSCredentialsAnnotationInputsSpy.mockReturnValue(mockImsInputs)
+
+      const actionRequestContext = {
+        contextActionLoader: actionLoader,
+        contextItem: action,
+        contextItemParams: actionParams,
+        contextItemName: actionName,
+        packageName,
+        actionConfig
+      }
+      const response = await invokeAction({ actionRequestContext, logger: mockLogger })
+
+      expect(getIncludeIMSCredentialsAnnotationInputsSpy).toHaveBeenCalledWith(action, expect.anything())
+      expect(actionParams.__ims_oauth_s2s).toEqual({ client_id: 'mock-access-token', org_id: 'mock-org-id' })
+      expect(actionParams.__ims_env).toEqual('stage')
+      expect(actionParams.existingParam).toEqual('value')
+      expect(mockLogger.debug).toHaveBeenCalledWith(`Added IMS credentials to action params for action '${actionName}'.`)
+      expect(response.statusCode).toEqual(200)
+    })
+
+    test('does not add IMS credentials when getIncludeIMSCredentialsAnnotationInputs returns null', async () => {
+      const packageName = 'foo'
+      const actionPath = fixturePath('actions/successReturnAction.js')
+      const actionLoader = createActionLoader(actionPath)
+
+      const action = { function: actionPath }
+      const actionParams = { existingParam: 'value' }
+      const actionName = 'a'
+      const actionConfig = {
+        [packageName]: {
+          actions: {
+            [actionName]: action
+          }
+        }
+      }
+
+      // Mock the function to return null (no annotation or no IMS auth object)
+      getIncludeIMSCredentialsAnnotationInputsSpy.mockReturnValue(null)
+
+      const actionRequestContext = {
+        contextActionLoader: actionLoader,
+        contextItem: action,
+        contextItemParams: actionParams,
+        contextItemName: actionName,
+        packageName,
+        actionConfig
+      }
+      const response = await invokeAction({ actionRequestContext, logger: mockLogger })
+
+      expect(getIncludeIMSCredentialsAnnotationInputsSpy).toHaveBeenCalledWith(action, expect.anything())
+      expect(actionParams.__ims_oauth_s2s).toBeUndefined()
+      expect(actionParams.__ims_env).toBeUndefined()
+      expect(actionParams.existingParam).toEqual('value')
+      expect(response.statusCode).toEqual(200)
     })
   })
 })
