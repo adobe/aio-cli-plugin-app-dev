@@ -33,7 +33,7 @@ DESCRIPTION
   Run your App Builder app locally
 ```
 
-_See code: [src/commands/app/dev/index.js](https://github.com/adobe/aio-cli-plugin-app-dev/blob/2.1.2/src/commands/app/dev/index.js)_
+_See code: [src/commands/app/dev/index.js](https://github.com/adobe/aio-cli-plugin-app-dev/blob/2.2.0/src/commands/app/dev/index.js)_
 <!-- commandsstop -->
 
 ## Overriding the hostname and port
