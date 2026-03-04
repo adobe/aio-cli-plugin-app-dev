@@ -520,6 +520,32 @@ describe('isRawWebAction', () => {
   })
 })
 
+test('action.annotations.raw-http', () => {
+  let action
+
+  action = { annotations: {} }
+  expect(isRawWebAction(action)).toBeFalsy()
+
+  action = { annotations: { 'raw-http': 'raw' } }
+  expect(isRawWebAction(action)).toBeFalsy()
+
+  action = { annotations: { 'raw-http': 'any other string value' } }
+  expect(isRawWebAction(action)).toBeFalsy()
+
+  action = { annotations: { 'raw-http': false } }
+  expect(isRawWebAction(action)).toBeFalsy()
+
+  action = { annotations: { 'raw-http': true } }
+  expect(isRawWebAction(action)).toBeTruthy()
+
+  action = { annotations: { 'raw-http': 'yes' } }
+  expect(isRawWebAction(action)).toBeTruthy()
+
+  action = { annotations: { 'raw-http': 'true' } }
+  expect(isRawWebAction(action)).toBeTruthy()
+})
+
+
 describe('statusCodeMessage', () => {
   test('900 - invalid', () => {
     const statusCode = 900
