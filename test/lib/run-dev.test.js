@@ -545,7 +545,6 @@ test('action.annotations.raw-http', () => {
   expect(isRawWebAction(action)).toBeTruthy()
 })
 
-
 describe('statusCodeMessage', () => {
   test('900 - invalid', () => {
     const statusCode = 900
