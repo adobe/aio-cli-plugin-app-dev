@@ -35,7 +35,7 @@
     "@adobe/aio-lib-core-networking": "^5",
     "@adobe/eslint-config-aio-lib-config": "^4.0.0",
     "dotenv": "^16.4.5",
-    "eol": "^0.9.1",
+    "eol": "^0.10.0",
     "eslint": "^8.57.1",
     "eslint-config-standard": "^17.1.0",
     "eslint-plugin-import": "^2.31.0",
