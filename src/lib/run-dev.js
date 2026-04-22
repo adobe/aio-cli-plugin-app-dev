@@ -601,7 +601,7 @@ function createActionParametersFromRequest ({ req, contextItem, actionInputs = {
   const isFormData = req.is('application/x-www-form-urlencoded')
   const isRaw = isRawWebAction(contextItem)
 
-  if (['post', 'put', 'patch', 'delete'].includes(params.__ow_method) && req.body !== null) {
+  if (['post', 'put', 'patch', 'delete'].includes(params.__ow_method?.toLowerCase()) && req.body !== null) {
     if (isRaw) {
       if (isFormData) {
         params.__ow_body = new URLSearchParams(req.body).toString() // convert json back to query string
