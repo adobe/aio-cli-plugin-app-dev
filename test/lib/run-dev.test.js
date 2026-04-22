@@ -192,6 +192,8 @@ test('exports', () => {
 })
 
 describe('createActionParametersFromRequest', () => {
+  const methodsWithBody = ['PUT', 'PATCH', 'DELETE']
+
   /** @private */
   async function createAsyncFnCall ({ isRaw, mimeType, body, method }) {
     const is = jest.fn((_type) => _type === mimeType)
@@ -235,6 +237,16 @@ describe('createActionParametersFromRequest', () => {
   test('non-raw: POST application/json', async () => {
     const isRaw = false
     const method = 'POST'
+    const mimeType = 'application/json'
+    const body = { some: 'json' }
+
+    const actionParams = await createAsyncFnCall({ isRaw, mimeType, body, method })
+    expect(actionParams).toMatchObject(body)
+    expect(actionParams.__ow_body).not.toBeDefined()
+  })
+
+  test.each(methodsWithBody)('non-raw: %s application/json', async (method) => {
+    const isRaw = false
     const mimeType = 'application/json'
     const body = { some: 'json' }
 
@@ -288,6 +300,15 @@ describe('createActionParametersFromRequest', () => {
   test('raw: POST application/json', async () => {
     const isRaw = true
     const method = 'POST'
+    const mimeType = 'application/json'
+    const body = { some: 'json' } // simulate middleware processing
+
+    const actionParams = await createAsyncFnCall({ isRaw, mimeType, body, method })
+    expect(actionParams.__ow_body).toEqual(Buffer.from(JSON.stringify(body)).toString('base64')) // raw body will be base64'ed
+  })
+
+  test.each(methodsWithBody)('raw: %s application/json', async (method) => {
+    const isRaw = true
     const mimeType = 'application/json'
     const body = { some: 'json' } // simulate middleware processing
 
