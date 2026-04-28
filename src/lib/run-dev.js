@@ -251,9 +251,11 @@ function isWebAction (action) {
 function isRawWebAction (action) {
   const raw = 'raw'
   const webExportValue = action?.annotations?.['web-export']
+  const rawHttpValue = action?.annotations?.['raw-http']
+  const isRawHttp = rawHttpValue === true || rawHttpValue === 'yes' || rawHttpValue === 'true'
   const webValue = action?.web
 
-  return (webExportValue === raw || webValue === raw)
+  return (webExportValue === raw || webValue === raw || isRawHttp)
 }
 
 /**
