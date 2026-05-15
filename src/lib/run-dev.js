@@ -14,6 +14,7 @@ const cloneDeep = require('lodash.clonedeep')
 const express = require('express')
 const fs = require('fs-extra')
 const path = require('node:path')
+const fsp = require('node:fs/promises')
 const https = require('node:https')
 const crypto = require('node:crypto')
 const livereload = require('livereload')
@@ -316,9 +317,25 @@ async function invokeSequence ({ actionRequestContext, logger }) {
  * @returns {object} the action function
  */
 async function defaultActionLoader ({ distFolder, packageName, actionName }) {
-  const actionFolder = path.join(distFolder, packageName, actionName)
-  const actionPath = `${actionFolder}-temp/index.js`
-  delete require.cache[actionPath]
+  const actionTempDir = path.join(distFolder, packageName, `${actionName}-temp`)
+  const actionPath = path.join(actionTempDir, 'index.js')
+
+  // Bundled actions are CommonJS. If an ancestor app package.json has "type": "module",
+  // Node would treat index.js here as ESM unless this directory declares otherwise.
+  try {
+    await fsp.access(actionPath)
+  } catch {
+    return require(actionPath)?.main
+  }
+
+  await fsp.writeFile(path.join(actionTempDir, 'package.json'), '{"type":"commonjs"}', 'utf8')
+
+  try {
+    delete require.cache[require.resolve(actionPath)]
+  } catch {
+    // ignore: module not yet loaded
+  }
+
   return require(actionPath)?.main
 }
 
