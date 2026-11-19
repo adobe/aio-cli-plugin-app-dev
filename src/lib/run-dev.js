@@ -75,6 +75,7 @@ async function runDev (runOptions, config, _inprocHookRunner) {
   const hasFrontend = devConfig.app.hasFrontend
   const hasBackend = devConfig.app.hasBackend
   const httpsSettings = runOptions?.parcel?.https
+  const webPath = devConfig.web.path ? `/${devConfig.web.path}/` : ''
 
   serveLogger.debug('hasBackend', hasBackend)
   serveLogger.debug('hasFrontend', hasFrontend)
@@ -144,6 +145,9 @@ async function runDev (runOptions, config, _inprocHookRunner) {
       port: bundlerPort,
       https: httpsSettings
     }
+    if (webPath) {
+      bundleOptions.defaultTargetOptions = { publicUrl: webPath }
+    }
 
     const bundler = await bundle(entries, devConfig.web.distDev, bundleOptions, serveLogger.debug.bind(serveLogger))
     await bundler.run() // run it once
@@ -183,7 +187,7 @@ async function runDev (runOptions, config, _inprocHookRunner) {
 
   if (hasFrontend) {
     app.use(connectLiveReload())
-    app.use(express.static(devConfig.web.distDev))
+    app.use(webPath || '/', express.static(devConfig.web.distDev))
   }
 
   // serveAction needs to clear cache for each request, so we get live changes
@@ -200,7 +204,7 @@ async function runDev (runOptions, config, _inprocHookRunner) {
 
   let frontendUrl
   if (hasFrontend) {
-    frontendUrl = `${httpsSettings ? 'https:' : 'http:'}//${SERVER_HOST}:${serverPort}`
+    frontendUrl = `${httpsSettings ? 'https:' : 'http:'}//${SERVER_HOST}:${serverPort}${webPath}`
   }
 
   const serverCleanup = async () => {
