@@ -99,13 +99,14 @@ const createReq = ({ url, body, headers = {}, query, method = 'GET', is = jest.f
   }
 }
 
-const createConfig = ({ distDev = 'dist', hasFrontend, hasBackend, packageName = 'mypackage', actions = {}, sequences = {} }) => {
+const createConfig = ({ distDev = 'dist', webPath, hasFrontend, hasBackend, packageName = 'mypackage', actions = {}, sequences = {} }) => {
   return {
     actions: {
       dist: 'dist'
     },
     web: {
-      distDev
+      distDev,
+      path: webPath
     },
     ow: {
       namespace: 'mynamespace',
@@ -1381,6 +1382,28 @@ describe('runDev', () => {
       expect(new URL(frontendUrl).protocol).toEqual('http:')
       expect(Object.keys(actionUrls).length).toBeGreaterThan(0)
     }
+  })
+
+  test('has front end with a web path', async () => {
+    const config = createConfig({
+      webPath: 'configuration',
+      distDev: 'dist-dev',
+      hasFrontend: true,
+      hasBackend: false
+    })
+    const runOptions = createRunOptions({ cert: 'my-cert', key: 'my-key' })
+    const hookRunner = () => {}
+    mockGetPort.mockImplementation(({ port }) => port)
+    mockLibWeb.bundle.mockResolvedValue({ run: jest.fn(), watch: jest.fn() })
+    mockExpress.static.mockReturnValue('static-middleware')
+
+    const { frontendUrl, serverCleanup } = await runDev(runOptions, config, hookRunner)
+    await serverCleanup()
+
+    expect(frontendUrl).toEqual(`https://localhost:${SERVER_DEFAULT_PORT}/configuration/`)
+    expect(mockLibWeb.bundle).toHaveBeenCalledWith(expect.any(String), 'dist-dev',
+      expect.objectContaining({ defaultTargetOptions: { publicUrl: '/configuration/' } }), expect.any(Function))
+    expect(mockExpress.use).toHaveBeenCalledWith('/configuration/', 'static-middleware')
   })
 
   test('has front end, has back end, default ports taken', async () => {
